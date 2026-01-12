@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(copy \"F:\\\\bian\\\\goproject\\\\Easy-Stream\\\\config.yaml\" \"F:\\\\bian\\\\goproject\\\\Easy-Stream\\\\config.yaml.example\")"
+    ]
+  }
+}
