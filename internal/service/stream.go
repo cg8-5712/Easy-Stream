@@ -65,6 +65,8 @@ func (s *StreamService) Create(req *model.CreateStreamRequest, userID int64) (*m
 		Status:             model.StreamStatusIdle,
 		Visibility:         req.Visibility,
 		Password:           passwordHash,
+		RecordEnabled:      req.RecordEnabled,
+		RecordFiles:        model.StringArray{},
 		StreamerName:       req.StreamerName,
 		StreamerContact:    req.StreamerContact,
 		ScheduledStartTime: req.ScheduledStartTime,
@@ -110,22 +112,24 @@ func (s *StreamService) Get(key string, userRole string, accessToken string) (*m
 	return nil, ErrPrivateStream
 }
 
-// List 获取推流列表（游客只能看公开的，管理员能看所有）
-func (s *StreamService) List(status string, visibility string, userRole string, page, pageSize int) (*model.StreamListResponse, error) {
-	if page < 1 {
-		page = 1
+// List 获取推流列表（游客只能看公开且正在直播的，管理员能看所有）
+func (s *StreamService) List(req *model.StreamListRequest, userRole string) (*model.StreamListResponse, error) {
+	if req.Page < 1 {
+		req.Page = 1
 	}
-	if pageSize < 1 {
-		pageSize = 20
+	if req.PageSize < 1 {
+		req.PageSize = 20
 	}
-	offset := (page - 1) * pageSize
+	offset := (req.Page - 1) * req.PageSize
 
-	// 游客只能看公开的直播
+	// 游客只能看公开且正在直播的
 	if userRole != model.UserRoleAdmin && userRole != model.UserRoleOperator {
-		visibility = model.StreamVisibilityPublic
+		req.Visibility = model.StreamVisibilityPublic
+		req.Status = model.StreamStatusPushing
+		req.TimeRange = "" // 游客不能使用时间范围过滤
 	}
 
-	streams, total, err := s.streamRepo.List(status, visibility, offset, pageSize)
+	streams, total, err := s.streamRepo.List(req, offset, req.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +138,18 @@ func (s *StreamService) List(status string, visibility string, userRole string, 
 		Total:   total,
 		Streams: streams,
 	}, nil
+}
+
+// GetByID 通过 ID 获取推流信息（管理员）
+func (s *StreamService) GetByID(id int64) (*model.Stream, error) {
+	stream, err := s.streamRepo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if stream == nil {
+		return nil, ErrStreamNotFound
+	}
+	return stream, nil
 }
 
 // Update 更新推流信息（管理员）
@@ -180,6 +196,29 @@ func (s *StreamService) Update(key string, req *model.UpdateStreamRequest) (*mod
 	}
 	if req.AutoKickDelay != nil {
 		stream.AutoKickDelay = *req.AutoKickDelay
+	}
+
+	// 处理动态录制开关
+	if req.RecordEnabled != nil {
+		oldRecordEnabled := stream.RecordEnabled
+		newRecordEnabled := *req.RecordEnabled
+
+		// 如果录制状态发生变化且正在推流
+		if oldRecordEnabled != newRecordEnabled && stream.Status == model.StreamStatusPushing {
+			if newRecordEnabled {
+				// 开启录制
+				if _, err := s.zlmClient.StartRecord("live", key, zlm.RecordTypeMP4, ""); err != nil {
+					// 记录错误但不阻止更新
+					fmt.Printf("failed to start record for stream %s: %v\n", key, err)
+				}
+			} else {
+				// 关闭录制
+				if _, err := s.zlmClient.StopRecord("live", key, zlm.RecordTypeMP4); err != nil {
+					fmt.Printf("failed to stop record for stream %s: %v\n", key, err)
+				}
+			}
+		}
+		stream.RecordEnabled = newRecordEnabled
 	}
 
 	if err := s.streamRepo.Update(stream); err != nil {
@@ -258,12 +297,31 @@ func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 		return ErrStreamNotFound
 	}
 
+	// 检查流状态，已结束的流不允许再次推流
+	if stream.Status == model.StreamStatusEnded {
+		return ErrStreamExpired
+	}
+
 	// 更新状态和实际开始时间
 	now := time.Now()
 	stream.Status = model.StreamStatusPushing
 	stream.Protocol = req.Schema
 	stream.ActualStartTime = &now
-	return s.streamRepo.Update(stream)
+
+	if err := s.streamRepo.Update(stream); err != nil {
+		return err
+	}
+
+	// 如果开启了录制，自动开始录制
+	if stream.RecordEnabled {
+		go func() {
+			if _, err := s.zlmClient.StartRecord("live", req.Stream, zlm.RecordTypeMP4, ""); err != nil {
+				fmt.Printf("failed to start record for stream %s: %v\n", req.Stream, err)
+			}
+		}()
+	}
+
+	return nil
 }
 
 // OnUnpublish 处理推流结束回调
@@ -276,10 +334,19 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 		return nil
 	}
 
+	// 如果开启了录制，停止录制
+	if stream.RecordEnabled {
+		go func() {
+			if _, err := s.zlmClient.StopRecord("live", req.Stream, zlm.RecordTypeMP4); err != nil {
+				fmt.Printf("failed to stop record for stream %s: %v\n", req.Stream, err)
+			}
+		}()
+	}
+
 	// 更新实际结束时间
 	now := time.Now()
 	stream.ActualEndTime = &now
-	stream.Status = model.StreamStatusIdle
+	stream.Status = model.StreamStatusEnded
 	return s.streamRepo.Update(stream)
 }
 
@@ -296,7 +363,7 @@ func (s *StreamService) OnFlowReport(req *model.OnFlowReportRequest) error {
 // CheckExpiredStreams 检查并断开超时的直播（定时任务）
 func (s *StreamService) CheckExpiredStreams() error {
 	// 获取所有正在推流的流
-	streams, _, err := s.streamRepo.List(model.StreamStatusPushing, "", 0, 1000)
+	streams, err := s.streamRepo.GetPushingStreams()
 	if err != nil {
 		return err
 	}
@@ -317,6 +384,11 @@ func (s *StreamService) CheckExpiredStreams() error {
 	}
 
 	return nil
+}
+
+// AddRecordFile 添加录制文件路径
+func (s *StreamService) AddRecordFile(streamKey, filePath string) error {
+	return s.streamRepo.AppendRecordFile(streamKey, filePath)
 }
 
 // generateAccessToken 生成访问令牌

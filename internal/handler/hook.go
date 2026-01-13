@@ -26,8 +26,18 @@ func (h *HookHandler) OnPublish(c *gin.Context) {
 	}
 
 	if err := h.streamSvc.OnPublish(&req); err != nil {
-		// 返回非 0 code 会拒绝推流
-		c.JSON(http.StatusOK, model.HookResponse{Code: -1, Msg: err.Error()})
+		// 根据错误类型返回不同的错误信息
+		msg := "unknown error"
+		switch err {
+		case service.ErrStreamNotFound:
+			msg = "stream not found"
+		case service.ErrStreamExpired:
+			msg = "stream expired"
+		default:
+			msg = err.Error()
+		}
+		// 返回 code=-1 会拒绝推流，ZLMediaKit 会断开连接
+		c.JSON(http.StatusOK, model.HookResponse{Code: -1, Msg: msg})
 		return
 	}
 

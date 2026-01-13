@@ -99,6 +99,7 @@ func main() {
 			admin.Use(middleware.Auth(cfg.JWT.Secret))
 			{
 				admin.POST("", streamHandler.Create)
+				admin.GET("/id/:id", streamHandler.GetByID) // 通过 ID 获取
 				admin.PUT("/:key", streamHandler.Update)
 				admin.DELETE("/:key", streamHandler.Delete)
 				admin.POST("/:key/kick", streamHandler.Kick)

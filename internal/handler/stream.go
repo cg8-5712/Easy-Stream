@@ -22,6 +22,7 @@ func NewStreamHandler(streamSvc *service.StreamService) *StreamHandler {
 func (h *StreamHandler) List(c *gin.Context) {
 	status := c.Query("status")
 	visibility := c.Query("visibility")
+	timeRange := c.Query("time_range")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
@@ -31,7 +32,15 @@ func (h *StreamHandler) List(c *gin.Context) {
 		userRole = "" // 游客
 	}
 
-	resp, err := h.streamSvc.List(status, visibility, userRole.(string), page, pageSize)
+	req := &model.StreamListRequest{
+		Status:     status,
+		Visibility: visibility,
+		TimeRange:  timeRange,
+		Page:       page,
+		PageSize:   pageSize,
+	}
+
+	resp, err := h.streamSvc.List(req, userRole.(string))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -79,6 +88,27 @@ func (h *StreamHandler) Get(c *gin.Context) {
 		}
 		if err == service.ErrPrivateStream {
 			c.JSON(http.StatusForbidden, gin.H{"error": "private stream requires password"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, stream)
+}
+
+// GetByID 通过 ID 获取推流详情（管理员）
+func (h *StreamHandler) GetByID(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	stream, err := h.streamSvc.GetByID(id)
+	if err != nil {
+		if err == service.ErrStreamNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
