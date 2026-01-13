@@ -205,7 +205,7 @@ Authorization: Bearer {access_token}
 
 ### 2.1 获取推流列表
 
-> 游客可访问，但只能看到公开直播；管理员可看到所有直播
+> 游客可访问，但只能看到公开且正在直播的内容；管理员可看到所有直播记录（包括过去、正在进行和将来的）
 
 **接口地址**
 ```
@@ -216,14 +216,24 @@ GET /api/v1/streams
 
 | 参数名 | 类型 | 必填 | 默认值 | 说明 |
 |--------|------|------|--------|------|
-| status | string | 否 | - | 状态过滤：`idle`/`pushing`/`destroyed` |
+| status | string | 否 | - | 状态过滤：`idle`/`pushing`/`ended`（仅管理员有效） |
 | visibility | string | 否 | - | 可见性过滤：`public`/`private`（仅管理员有效） |
+| time_range | string | 否 | - | 时间范围：`past`/`current`/`future`（仅管理员有效） |
 | page | int | 否 | 1 | 页码 |
 | pageSize | int | 否 | 20 | 每页数量 |
+
+**时间范围说明**
+
+| 值 | 说明 |
+|----|------|
+| past | 已结束的直播（actual_end_time 不为空） |
+| current | 正在进行的直播（status = pushing） |
+| future | 未开始的直播（status = idle 且 scheduled_start_time > 当前时间） |
 
 **请求示例**
 ```
 GET /api/v1/streams?status=pushing&page=1&pageSize=20
+GET /api/v1/streams?time_range=past&page=1&pageSize=20
 ```
 
 **响应示例** (200 OK)
@@ -239,6 +249,8 @@ GET /api/v1/streams?status=pushing&page=1&pageSize=20
       "device_id": "camera-001",
       "status": "pushing",
       "visibility": "public",
+      "record_enabled": true,
+      "record_files": ["/recordings/2024/01/01/abc123def456_001.mp4"],
       "protocol": "rtmp",
       "bitrate": 2500,
       "fps": 30,
@@ -281,6 +293,7 @@ Authorization: Bearer {access_token}
 | device_id | string | 否 | 设备 ID |
 | visibility | string | 是 | 可见性：`public`/`private` |
 | password | string | 条件必填 | 私有直播密码（visibility=private 时必填） |
+| record_enabled | bool | 否 | 是否开启录制，默认 false |
 | streamer_name | string | 是 | 直播人员姓名 |
 | streamer_contact | string | 否 | 直播人员联系方式 |
 | scheduled_start_time | datetime | 是 | 预计开始时间 (ISO 8601) |
@@ -294,6 +307,7 @@ Authorization: Bearer {access_token}
   "description": "每周技术分享直播",
   "device_id": "camera-001",
   "visibility": "public",
+  "record_enabled": true,
   "streamer_name": "张三",
   "streamer_contact": "13800138000",
   "scheduled_start_time": "2024-01-01T14:00:00Z",
@@ -324,6 +338,8 @@ Authorization: Bearer {access_token}
   "device_id": "camera-001",
   "status": "idle",
   "visibility": "public",
+  "record_enabled": true,
+  "record_files": [],
   "protocol": "",
   "bitrate": 0,
   "fps": 0,
@@ -349,9 +365,71 @@ Authorization: Bearer {access_token}
 **播放地址**
 - WebRTC: `webrtc://{server}:8000/live/{stream_key}`
 
+**回放地址**（录制开启且直播结束后可用）
+- HTTP: `http://{server}:8080/recordings/{record_file}`
+
+> 多次开关录制会生成多个文件，通过 `record_files` 数组获取所有录制文件路径。
+
 ---
 
-### 2.3 获取推流详情
+### 2.3 通过 ID 获取推流详情（管理员）
+
+**接口地址**
+```
+GET /api/v1/streams/id/:id
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| id | int | 是 | 直播 ID |
+
+**请求示例**
+```
+GET /api/v1/streams/id/1
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "id": 1,
+  "stream_key": "abc123def456",
+  "name": "技术分享会",
+  "description": "每周技术分享直播",
+  "device_id": "camera-001",
+  "status": "ended",
+  "visibility": "public",
+  "record_enabled": true,
+  "record_files": [
+    "/recordings/2024/01/01/abc123def456_001.mp4",
+    "/recordings/2024/01/01/abc123def456_002.mp4"
+  ],
+  "protocol": "rtmp",
+  "bitrate": 2500,
+  "fps": 30,
+  "streamer_name": "张三",
+  "streamer_contact": "13800138000",
+  "scheduled_start_time": "2024-01-01T14:00:00Z",
+  "scheduled_end_time": "2024-01-01T16:00:00Z",
+  "auto_kick_delay": 30,
+  "actual_start_time": "2024-01-01T14:05:00Z",
+  "actual_end_time": "2024-01-01T16:10:00Z",
+  "last_frame_at": "2024-01-01T16:10:00Z",
+  "created_by": 1,
+  "created_at": "2024-01-01T10:00:00Z",
+  "updated_at": "2024-01-01T16:10:00Z"
+}
+```
+
+---
+
+### 2.4 通过推流码获取推流详情
 
 > 游客可访问公开直播；私有直播需要 access_token 或管理员权限
 
@@ -388,6 +466,8 @@ GET /api/v1/streams/abc123def456?access_token=xyz789...
   "device_id": "camera-001",
   "status": "pushing",
   "visibility": "public",
+  "record_enabled": true,
+  "record_files": ["/recordings/2024/01/01/abc123def456_001.mp4"],
   "protocol": "rtmp",
   "bitrate": 2500,
   "fps": 30,
@@ -423,7 +503,7 @@ GET /api/v1/streams/abc123def456?access_token=xyz789...
 
 ---
 
-### 2.4 验证私有直播密码（游客）
+### 2.5 验证私有直播密码（游客）
 
 > 游客通过此接口验证私有直播密码，获取访问令牌
 
@@ -477,7 +557,7 @@ POST /api/v1/streams/:key/verify
 
 ---
 
-### 2.5 更新推流信息（管理员）
+### 2.6 更新推流信息（管理员）
 
 **接口地址**
 ```
@@ -504,11 +584,24 @@ Authorization: Bearer {access_token}
 | device_id | string | 否 | 设备 ID |
 | visibility | string | 否 | 可见性：`public`/`private` |
 | password | string | 否 | 私有直播密码 |
+| record_enabled | bool | 否 | 是否开启录制（支持推流中动态修改） |
 | streamer_name | string | 否 | 直播人员姓名 |
 | streamer_contact | string | 否 | 直播人员联系方式 |
 | scheduled_start_time | datetime | 否 | 预计开始时间 |
 | scheduled_end_time | datetime | 否 | 预计结束时间 |
 | auto_kick_delay | int | 否 | 超时断流延迟（分钟） |
+
+**动态录制说明**
+
+`record_enabled` 参数支持在推流过程中动态修改：
+
+| 场景 | 行为 |
+|------|------|
+| 推流中开启录制 | 从当前时间点开始录制，不包含之前的内容 |
+| 推流中关闭录制 | 立即停止录制，已录制内容保留 |
+| 多次开关录制 | 每次开启会生成新的录制文件 |
+
+> ⚠️ **注意**: 推流中途开启录制，录制文件只包含开启后的内容。如需完整录制，请在创建直播时开启。
 
 **请求示例**
 ```json
@@ -531,7 +624,7 @@ Authorization: Bearer {access_token}
 
 ---
 
-### 2.6 删除推流码（管理员）
+### 2.7 删除推流码（管理员）
 
 **接口地址**
 ```
@@ -552,7 +645,7 @@ Authorization: Bearer {access_token}
 
 ---
 
-### 2.7 强制断流（管理员）
+### 2.8 强制断流（管理员）
 
 **接口地址**
 ```
@@ -637,13 +730,39 @@ POST /api/v1/hooks/on_publish
 }
 ```
 
+**验证逻辑**
+
+系统会对推流请求进行以下验证：
+
+| 验证项 | 说明 |
+|-------|------|
+| stream_key 存在性 | 推流码必须是通过管理接口创建的有效推流码 |
+| 状态检查 | 推流码状态不能为 `destroyed` |
+
 **响应示例**
+
+验证通过 (允许推流):
 ```json
 {
   "code": 0,
   "msg": "success"
 }
 ```
+
+验证失败 (拒绝推流):
+```json
+{
+  "code": -1,
+  "msg": "stream not found"
+}
+```
+
+| 错误信息 | 说明 |
+|---------|------|
+| stream not found | 推流码不存在 |
+| stream expired | 推流码已销毁 |
+
+> ⚠️ **安全说明**: 无效或不存在的推流码将被拒绝，ZLMediaKit 会自动断开该推流连接。
 
 ### 4.2 推流结束回调
 
@@ -695,8 +814,10 @@ POST /api/v1/hooks/on_stream_none_reader
   name: string                  // 直播名称
   description: string           // 直播描述
   device_id: string             // 设备 ID
-  status: string                // 状态: idle / pushing / destroyed
+  status: string                // 状态: idle / pushing / ended
   visibility: string            // 可见性: public / private
+  record_enabled: boolean       // 是否开启录制
+  record_files: string[]        // 录制文件路径列表（多次开关录制会生成多个文件）
   protocol: string              // 协议: rtmp / rtsp / srt
   bitrate: number               // 码率 (kbps)
   fps: number                   // 帧率
@@ -778,4 +899,4 @@ POST /api/v1/hooks/on_stream_none_reader
 ---
 
 **文档版本**: v2.0
-**最后更新**: 2024-01-01
+**最后更新**: 2026-01-13
