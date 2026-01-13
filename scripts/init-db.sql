@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS streams (
     status                  VARCHAR(16) DEFAULT 'idle',
     visibility              VARCHAR(16) DEFAULT 'public',
     password                VARCHAR(256),
+    record_enabled          BOOLEAN DEFAULT FALSE,
+    record_files            JSONB DEFAULT '[]',
     protocol                VARCHAR(16),
     bitrate                 INTEGER DEFAULT 0,
     fps                     INTEGER DEFAULT 0,
@@ -52,6 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_streams_device_id ON streams(device_id);
 CREATE INDEX IF NOT EXISTS idx_streams_created_by ON streams(created_by);
 CREATE INDEX IF NOT EXISTS idx_streams_scheduled_start ON streams(scheduled_start_time);
 CREATE INDEX IF NOT EXISTS idx_streams_scheduled_end ON streams(scheduled_end_time);
+CREATE INDEX IF NOT EXISTS idx_streams_record_enabled ON streams(record_enabled);
 
 -- 创建操作日志表
 CREATE TABLE IF NOT EXISTS operation_logs (
@@ -99,9 +102,11 @@ COMMENT ON COLUMN streams.stream_key IS '推流密钥';
 COMMENT ON COLUMN streams.name IS '推流名称';
 COMMENT ON COLUMN streams.description IS '推流描述';
 COMMENT ON COLUMN streams.device_id IS '设备ID';
-COMMENT ON COLUMN streams.status IS '状态：idle/pushing/destroyed';
+COMMENT ON COLUMN streams.status IS '状态：idle/pushing/ended';
 COMMENT ON COLUMN streams.visibility IS '可见性：public/private';
 COMMENT ON COLUMN streams.password IS '私有直播密码（加密）';
+COMMENT ON COLUMN streams.record_enabled IS '是否开启录制';
+COMMENT ON COLUMN streams.record_files IS '录制文件路径列表（JSON数组）';
 COMMENT ON COLUMN streams.protocol IS '推流协议：rtmp/rtsp/srt';
 COMMENT ON COLUMN streams.bitrate IS '码率（kbps）';
 COMMENT ON COLUMN streams.fps IS '帧率';

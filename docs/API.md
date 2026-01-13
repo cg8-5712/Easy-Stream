@@ -737,7 +737,7 @@ POST /api/v1/hooks/on_publish
 | 验证项 | 说明 |
 |-------|------|
 | stream_key 存在性 | 推流码必须是通过管理接口创建的有效推流码 |
-| 状态检查 | 推流码状态不能为 `destroyed` |
+| 状态检查 | 推流码状态不能为 `ended` |
 
 **响应示例**
 
@@ -760,7 +760,7 @@ POST /api/v1/hooks/on_publish
 | 错误信息 | 说明 |
 |---------|------|
 | stream not found | 推流码不存在 |
-| stream expired | 推流码已销毁 |
+| stream expired | 推流码已结束 |
 
 > ⚠️ **安全说明**: 无效或不存在的推流码将被拒绝，ZLMediaKit 会自动断开该推流连接。
 

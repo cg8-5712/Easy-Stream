@@ -8,7 +8,10 @@
 - **多协议推流**: 支持 RTMP / RTSP / SRT
 - **推流管理**: 创建/删除推流码、强制断流
 - **实时监控**: 流状态、码率、帧率实时更新
-- **空流检测**: 自动检测并销毁无内容流
+- **录制回放**: 支持直播录制，动态开关录制
+- **私有直播**: 支持密码保护的私有直播
+- **推流验证**: 无效推流码自动拒绝
+- **超时断流**: 超时自动断流机制
 - **Hook 集成**: 与 ZLMediaKit 深度集成
 
 ## 技术栈
@@ -108,6 +111,9 @@ log:
 ```bash
 psql -U postgres -c "CREATE DATABASE easystream;"
 psql -U postgres -d easystream -f scripts/init-db.sql
+
+# 如果是升级，运行迁移脚本
+psql -U postgres -d easystream -f scripts/migrations/002_add_record_fields.sql
 ```
 
 ### 4. 运行后端
@@ -162,9 +168,11 @@ docker-compose up -d
 |------|------|------|
 | GET | `/api/v1/streams` | 获取推流列表 |
 | POST | `/api/v1/streams` | 创建推流码 |
-| GET | `/api/v1/streams/:key` | 获取推流详情 |
+| GET | `/api/v1/streams/id/:id` | 通过 ID 获取推流详情 |
+| GET | `/api/v1/streams/:key` | 通过推流码获取详情 |
 | PUT | `/api/v1/streams/:key` | 更新推流信息 |
 | DELETE | `/api/v1/streams/:key` | 删除推流码 |
+| POST | `/api/v1/streams/:key/verify` | 验证私有直播密码 |
 | POST | `/api/v1/streams/:key/kick` | 强制断流 |
 
 ### 系统
@@ -188,6 +196,14 @@ SRT:   srt://{server}:9000?streamid=#!::r=live/{stream_key},m=publish
 
 ```
 WebRTC: webrtc://{server}:8000/live/{stream_key}
+```
+
+## 回放地址
+
+录制开启且直播结束后可用：
+
+```
+HTTP: http://{server}:8080/recordings/{record_file}
 ```
 
 ## 默认账号
