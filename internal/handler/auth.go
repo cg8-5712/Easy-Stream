@@ -38,8 +38,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// RefreshToken 刷新访问令牌
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	var req model.RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := h.authSvc.RefreshToken(req.RefreshToken)
+	if err != nil {
+		if err == service.ErrInvalidToken {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired refresh token"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // Logout 用户登出
 func (h *AuthHandler) Logout(c *gin.Context) {
+	var req model.RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"message": "logged out"})
+		return
+	}
+
+	h.authSvc.Logout(req.RefreshToken)
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
 

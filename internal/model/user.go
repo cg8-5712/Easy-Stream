@@ -4,12 +4,19 @@ import "time"
 
 // User 用户信息
 type User struct {
-	ID           int64     `json:"id" db:"id"`
-	Username     string    `json:"username" db:"username"`
-	PasswordHash string    `json:"-" db:"password_hash"`
-	Role         string    `json:"role" db:"role"` // admin / operator / viewer
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	ID           int64      `json:"id" db:"id"`
+	Username     string     `json:"username" db:"username"`
+	PasswordHash string     `json:"-" db:"password_hash"`
+	Role         string     `json:"role" db:"role"` // admin / operator / viewer
+	Email        string     `json:"email" db:"email"`
+	Phone        string     `json:"phone" db:"phone"`
+	RealName     string     `json:"real_name" db:"real_name"`
+	Avatar       string     `json:"avatar" db:"avatar"`
+	Department   string     `json:"department" db:"department"`
+	Status       string     `json:"status" db:"status"` // active / disabled
+	LastLoginAt  *time.Time `json:"last_login_at" db:"last_login_at"`
+	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 // UserRole 用户角色常量
@@ -17,6 +24,12 @@ const (
 	UserRoleAdmin    = "admin"
 	UserRoleOperator = "operator"
 	UserRoleViewer   = "viewer"
+)
+
+// UserStatus 用户状态常量
+const (
+	UserStatusActive   = "active"
+	UserStatusDisabled = "disabled"
 )
 
 // LoginRequest 登录请求
@@ -27,6 +40,20 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	Token string `json:"token"`
-	User  *User  `json:"user"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"` // 秒
+	User         *User  `json:"user"`
+}
+
+// RefreshTokenRequest 刷新 Token 请求
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// RefreshTokenResponse 刷新 Token 响应
+type RefreshTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"`
 }

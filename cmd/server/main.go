@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"easy-stream/internal/config"
 	"easy-stream/internal/handler"
@@ -42,14 +43,25 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 
 	// 初始化 Service
-	streamSvc := service.NewStreamService(streamRepo, cfg.ZLMediaKit)
-	authSvc := service.NewAuthService(userRepo, cfg.JWT)
+	streamSvc := service.NewStreamService(streamRepo, rdb, cfg.ZLMediaKit)
+	authSvc := service.NewAuthService(userRepo, rdb, cfg.JWT)
 
 	// 初始化 Handler
 	streamHandler := handler.NewStreamHandler(streamSvc)
 	authHandler := handler.NewAuthHandler(authSvc)
 	hookHandler := handler.NewHookHandler(streamSvc)
 	systemHandler := handler.NewSystemHandler()
+
+	// 启动定时任务：检查超时直播
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := streamSvc.CheckExpiredStreams(); err != nil {
+				log.Printf("Failed to check expired streams: %v", err)
+			}
+		}
+	}()
 
 	// 设置 Gin
 	if cfg.Server.Mode == "release" {
@@ -69,20 +81,28 @@ func main() {
 		auth := api.Group("/auth")
 		{
 			auth.POST("/login", authHandler.Login)
+			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.POST("/logout", authHandler.Logout)
 			auth.GET("/profile", middleware.Auth(cfg.JWT.Secret), authHandler.Profile)
 		}
 
-		// 推流管理接口 (需要认证)
+		// 推流管理接口
 		streams := api.Group("/streams")
-		streams.Use(middleware.Auth(cfg.JWT.Secret))
 		{
+			// 游客可访问（公开直播列表）
 			streams.GET("", streamHandler.List)
-			streams.POST("", streamHandler.Create)
 			streams.GET("/:key", streamHandler.Get)
-			streams.PUT("/:key", streamHandler.Update)
-			streams.DELETE("/:key", streamHandler.Delete)
-			streams.POST("/:key/kick", streamHandler.Kick)
+			streams.POST("/:key/verify", streamHandler.VerifyPassword)
+
+			// 管理员接口（需要认证）
+			admin := streams.Group("")
+			admin.Use(middleware.Auth(cfg.JWT.Secret))
+			{
+				admin.POST("", streamHandler.Create)
+				admin.PUT("/:key", streamHandler.Update)
+				admin.DELETE("/:key", streamHandler.Delete)
+				admin.POST("/:key/kick", streamHandler.Kick)
+			}
 		}
 
 		// 系统接口
