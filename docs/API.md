@@ -262,6 +262,9 @@ GET /api/v1/streams?time_range=past&page=1&pageSize=20
       "actual_start_time": "2024-01-01T14:05:00Z",
       "actual_end_time": null,
       "last_frame_at": "2024-01-01T15:30:00Z",
+      "current_viewers": 128,
+      "total_viewers": 1520,
+      "peak_viewers": 256,
       "created_by": 1,
       "created_at": "2024-01-01T10:00:00Z",
       "updated_at": "2024-01-01T14:05:00Z"
@@ -351,6 +354,9 @@ Authorization: Bearer {access_token}
   "actual_start_time": null,
   "actual_end_time": null,
   "last_frame_at": null,
+  "current_viewers": 0,
+  "total_viewers": 0,
+  "peak_viewers": 0,
   "created_by": 1,
   "created_at": "2024-01-01T10:00:00Z",
   "updated_at": "2024-01-01T10:00:00Z"
@@ -421,6 +427,9 @@ GET /api/v1/streams/id/1
   "actual_start_time": "2024-01-01T14:05:00Z",
   "actual_end_time": "2024-01-01T16:10:00Z",
   "last_frame_at": "2024-01-01T16:10:00Z",
+  "current_viewers": 0,
+  "total_viewers": 3280,
+  "peak_viewers": 512,
   "created_by": 1,
   "created_at": "2024-01-01T10:00:00Z",
   "updated_at": "2024-01-01T16:10:00Z"
@@ -479,6 +488,9 @@ GET /api/v1/streams/abc123def456?access_token=xyz789...
   "actual_start_time": "2024-01-01T14:05:00Z",
   "actual_end_time": null,
   "last_frame_at": "2024-01-01T15:30:00Z",
+  "current_viewers": 128,
+  "total_viewers": 1520,
+  "peak_viewers": 256,
   "created_by": 1,
   "created_at": "2024-01-01T10:00:00Z",
   "updated_at": "2024-01-01T14:05:00Z"
@@ -782,6 +794,48 @@ POST /api/v1/hooks/on_flow_report
 POST /api/v1/hooks/on_stream_none_reader
 ```
 
+### 4.5 播放开始回调
+
+```
+POST /api/v1/hooks/on_play
+```
+
+**请求示例**
+```json
+{
+  "app": "live",
+  "stream": "abc123def456",
+  "schema": "rtmp",
+  "mediaServerId": "zlm-server-1",
+  "ip": "192.168.1.100",
+  "port": 12345,
+  "id": "player-unique-id"
+}
+```
+
+**说明**: 当有观众开始观看直播时，ZLMediaKit 会调用此接口。系统会自动增加当前观看人数和累计观看人次。
+
+### 4.6 播放器断开回调
+
+```
+POST /api/v1/hooks/on_player_disconnect
+```
+
+**请求示例**
+```json
+{
+  "app": "live",
+  "stream": "abc123def456",
+  "schema": "rtmp",
+  "mediaServerId": "zlm-server-1",
+  "ip": "192.168.1.100",
+  "port": 12345,
+  "id": "player-unique-id"
+}
+```
+
+**说明**: 当观众离开直播时，ZLMediaKit 会调用此接口。系统会自动减少当前观看人数。
+
 ---
 
 ## 数据模型
@@ -829,6 +883,10 @@ POST /api/v1/hooks/on_stream_none_reader
   actual_start_time: string     // 实际开始时间
   actual_end_time: string       // 实际结束时间
   last_frame_at: string         // 最后一帧时间
+  // 观看统计
+  current_viewers: number       // 当前观看人数
+  total_viewers: number         // 累计观看人次
+  peak_viewers: number          // 峰值观看人数
   created_by: number            // 创建者用户 ID
   created_at: string            // 创建时间
   updated_at: string            // 更新时间

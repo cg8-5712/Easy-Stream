@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS streams (
     actual_start_time       TIMESTAMP,
     actual_end_time         TIMESTAMP,
     last_frame_at           TIMESTAMP,
+    current_viewers         INTEGER DEFAULT 0,
+    total_viewers           INTEGER DEFAULT 0,
+    peak_viewers            INTEGER DEFAULT 0,
     created_by              INTEGER REFERENCES users(id),
     created_at              TIMESTAMP DEFAULT NOW(),
     updated_at              TIMESTAMP DEFAULT NOW()
@@ -118,6 +121,9 @@ COMMENT ON COLUMN streams.auto_kick_delay IS '超时自动断流延迟（分钟�
 COMMENT ON COLUMN streams.actual_start_time IS '实际开始时间';
 COMMENT ON COLUMN streams.actual_end_time IS '实际结束时间';
 COMMENT ON COLUMN streams.last_frame_at IS '最后一帧时间';
+COMMENT ON COLUMN streams.current_viewers IS '当前观看人数';
+COMMENT ON COLUMN streams.total_viewers IS '累计观看人次';
+COMMENT ON COLUMN streams.peak_viewers IS '峰值观看人数';
 COMMENT ON COLUMN streams.created_by IS '创建者用户ID';
 
 COMMENT ON TABLE operation_logs IS '操作日志表';

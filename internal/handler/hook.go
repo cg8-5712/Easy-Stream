@@ -79,3 +79,27 @@ func (h *HookHandler) OnStreamNoneReader(c *gin.Context) {
 	// 返回 close: true 会关闭流
 	c.JSON(http.StatusOK, gin.H{"code": 0, "close": false})
 }
+
+// OnPlay 播放开始回调
+func (h *HookHandler) OnPlay(c *gin.Context) {
+	var req model.OnPlayRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: err.Error()})
+		return
+	}
+
+	h.streamSvc.OnPlay(&req)
+	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
+}
+
+// OnPlayerDisconnect 播放器断开回调
+func (h *HookHandler) OnPlayerDisconnect(c *gin.Context) {
+	var req model.OnPlayerDisconnectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: err.Error()})
+		return
+	}
+
+	h.streamSvc.OnPlayerDisconnect(&req)
+	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
+}

@@ -54,9 +54,13 @@ type Stream struct {
 	ActualStartTime    *time.Time  `json:"actual_start_time" db:"actual_start_time"`       // 实际开始时间
 	ActualEndTime      *time.Time  `json:"actual_end_time" db:"actual_end_time"`           // 实际结束时间
 	LastFrameAt        *time.Time  `json:"last_frame_at" db:"last_frame_at"`
-	CreatedBy          int64       `json:"created_by" db:"created_by"` // 创建者用户ID
-	CreatedAt          time.Time   `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time   `json:"updated_at" db:"updated_at"`
+	// 观看统计
+	CurrentViewers int   `json:"current_viewers" db:"current_viewers"` // 当前观看人数
+	TotalViewers   int   `json:"total_viewers" db:"total_viewers"`     // 累计观看人次
+	PeakViewers    int   `json:"peak_viewers" db:"peak_viewers"`       // 峰值观看人数
+	CreatedBy      int64 `json:"created_by" db:"created_by"`           // 创建者用户ID
+	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at" db:"updated_at"`
 }
 
 // StreamStatus 流状态常量

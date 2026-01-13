@@ -255,6 +255,8 @@ on_publish=http://backend:8080/api/v1/hooks/on_publish
 on_unpublish=http://backend:8080/api/v1/hooks/on_unpublish
 on_flow_report=http://backend:8080/api/v1/hooks/on_flow_report
 on_stream_none_reader=http://backend:8080/api/v1/hooks/on_stream_none_reader
+on_play=http://backend:8080/api/v1/hooks/on_play
+on_player_disconnect=http://backend:8080/api/v1/hooks/on_player_disconnect
 ```
 
 ## 架构图

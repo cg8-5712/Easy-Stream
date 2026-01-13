@@ -42,6 +42,29 @@ type OnStreamNoneReaderRequest struct {
 	MediaSrvID string `json:"mediaServerId"`
 }
 
+// OnPlayRequest 播放开始回调
+type OnPlayRequest struct {
+	App        string `json:"app"`
+	Stream     string `json:"stream"`
+	Schema     string `json:"schema"`
+	MediaSrvID string `json:"mediaServerId"`
+	IP         string `json:"ip"`
+	Port       int    `json:"port"`
+	Params     string `json:"params"`
+	ID         string `json:"id"` // 播放器唯一标识
+}
+
+// OnPlayerDisconnectRequest 播放器断开回调
+type OnPlayerDisconnectRequest struct {
+	App        string `json:"app"`
+	Stream     string `json:"stream"`
+	Schema     string `json:"schema"`
+	MediaSrvID string `json:"mediaServerId"`
+	IP         string `json:"ip"`
+	Port       int    `json:"port"`
+	ID         string `json:"id"` // 播放器唯一标识
+}
+
 // HookResponse Hook 响应
 type HookResponse struct {
 	Code int    `json:"code"`

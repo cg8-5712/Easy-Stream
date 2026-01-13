@@ -49,6 +49,7 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_frame_at,
+			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams WHERE stream_key = $1
 	`
@@ -62,6 +63,7 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 		&stream.StreamerName, &stream.StreamerContact,
 		&stream.ScheduledStartTime, &stream.ScheduledEndTime, &stream.AutoKickDelay,
 		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastFrameAt,
+		&stream.CurrentViewers, &stream.TotalViewers, &stream.PeakViewers,
 		&stream.CreatedBy, &stream.CreatedAt, &stream.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -78,6 +80,7 @@ func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_frame_at,
+			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams WHERE id = $1
 	`
@@ -91,6 +94,7 @@ func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 		&stream.StreamerName, &stream.StreamerContact,
 		&stream.ScheduledStartTime, &stream.ScheduledEndTime, &stream.AutoKickDelay,
 		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastFrameAt,
+		&stream.CurrentViewers, &stream.TotalViewers, &stream.PeakViewers,
 		&stream.CreatedBy, &stream.CreatedAt, &stream.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -158,6 +162,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_frame_at,
+			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams` + whereClause + ` ORDER BY created_at DESC LIMIT $` +
 		fmt.Sprintf("%d", argIndex) + ` OFFSET $` + fmt.Sprintf("%d", argIndex+1)
@@ -180,6 +185,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 			&s.StreamerName, &s.StreamerContact,
 			&s.ScheduledStartTime, &s.ScheduledEndTime, &s.AutoKickDelay,
 			&s.ActualStartTime, &s.ActualEndTime, &s.LastFrameAt,
+			&s.CurrentViewers, &s.TotalViewers, &s.PeakViewers,
 			&s.CreatedBy, &s.CreatedAt, &s.UpdatedAt,
 		)
 		if err != nil {
@@ -200,8 +206,9 @@ func (r *StreamRepository) Update(stream *model.Stream) error {
 			streamer_name=$12, streamer_contact=$13,
 			scheduled_start_time=$14, scheduled_end_time=$15, auto_kick_delay=$16,
 			actual_start_time=$17, actual_end_time=$18, last_frame_at=$19,
-			updated_at=$20
-		WHERE stream_key=$21
+			current_viewers=$20, total_viewers=$21, peak_viewers=$22,
+			updated_at=$23
+		WHERE stream_key=$24
 	`
 	recordFiles, _ := stream.RecordFiles.Value()
 	_, err := r.db.Exec(query,
@@ -212,6 +219,7 @@ func (r *StreamRepository) Update(stream *model.Stream) error {
 		stream.StreamerName, stream.StreamerContact,
 		stream.ScheduledStartTime, stream.ScheduledEndTime, stream.AutoKickDelay,
 		stream.ActualStartTime, stream.ActualEndTime, stream.LastFrameAt,
+		stream.CurrentViewers, stream.TotalViewers, stream.PeakViewers,
 		time.Now(), stream.StreamKey,
 	)
 	return err
@@ -251,6 +259,7 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_frame_at,
+			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams WHERE status = $1
 	`
@@ -271,6 +280,7 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 			&s.StreamerName, &s.StreamerContact,
 			&s.ScheduledStartTime, &s.ScheduledEndTime, &s.AutoKickDelay,
 			&s.ActualStartTime, &s.ActualEndTime, &s.LastFrameAt,
+			&s.CurrentViewers, &s.TotalViewers, &s.PeakViewers,
 			&s.CreatedBy, &s.CreatedAt, &s.UpdatedAt,
 		)
 		if err != nil {
@@ -279,6 +289,39 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 		streams = append(streams, s)
 	}
 	return streams, nil
+}
+
+// IncrementViewers 增加观看人数（有人进入观看）
+func (r *StreamRepository) IncrementViewers(key string) error {
+	query := `
+		UPDATE streams SET
+			current_viewers = current_viewers + 1,
+			total_viewers = total_viewers + 1,
+			peak_viewers = GREATEST(peak_viewers, current_viewers + 1),
+			updated_at = $1
+		WHERE stream_key = $2
+	`
+	_, err := r.db.Exec(query, time.Now(), key)
+	return err
+}
+
+// DecrementViewers 减少观看人数（有人离开）
+func (r *StreamRepository) DecrementViewers(key string) error {
+	query := `
+		UPDATE streams SET
+			current_viewers = GREATEST(0, current_viewers - 1),
+			updated_at = $1
+		WHERE stream_key = $2
+	`
+	_, err := r.db.Exec(query, time.Now(), key)
+	return err
+}
+
+// ResetCurrentViewers 重置当前观看人数（直播结束时调用）
+func (r *StreamRepository) ResetCurrentViewers(key string) error {
+	query := `UPDATE streams SET current_viewers = 0, updated_at = $1 WHERE stream_key = $2`
+	_, err := r.db.Exec(query, time.Now(), key)
+	return err
 }
 
 // Delete 删除推流

@@ -343,11 +343,27 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 		}()
 	}
 
+	// 重置当前观看人数
+	s.streamRepo.ResetCurrentViewers(req.Stream)
+
 	// 更新实际结束时间
 	now := time.Now()
 	stream.ActualEndTime = &now
 	stream.Status = model.StreamStatusEnded
+	stream.CurrentViewers = 0
 	return s.streamRepo.Update(stream)
+}
+
+// OnPlay 处理播放开始回调
+func (s *StreamService) OnPlay(req *model.OnPlayRequest) error {
+	// 增加观看人数
+	return s.streamRepo.IncrementViewers(req.Stream)
+}
+
+// OnPlayerDisconnect 处理播放器断开回调
+func (s *StreamService) OnPlayerDisconnect(req *model.OnPlayerDisconnectRequest) error {
+	// 减少观看人数
+	return s.streamRepo.DecrementViewers(req.Stream)
 }
 
 // OnFlowReport 处理流量统计回调
