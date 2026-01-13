@@ -92,6 +92,82 @@ func (c *Client) GetServerConfig() (*ServerConfigResponse, error) {
 	return &result, nil
 }
 
+// StartRecord 开始录制
+// app: 应用名，如 "live"
+// stream: 流名称（stream_key）
+// recordType: 录制类型，0 为 HLS，1 为 MP4
+// customizedPath: 自定义录制路径（可选）
+func (c *Client) StartRecord(app, stream string, recordType int, customizedPath string) (*RecordResponse, error) {
+	params := url.Values{}
+	params.Set("secret", c.secret)
+	params.Set("app", app)
+	params.Set("stream", stream)
+	params.Set("type", fmt.Sprintf("%d", recordType))
+	params.Set("vhost", "__defaultVhost__")
+	if customizedPath != "" {
+		params.Set("customized_path", customizedPath)
+	}
+
+	resp, err := c.get("/index/api/startRecord", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var result RecordResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// StopRecord 停止录制
+// app: 应用名，如 "live"
+// stream: 流名称（stream_key）
+// recordType: 录制类型，0 为 HLS，1 为 MP4
+func (c *Client) StopRecord(app, stream string, recordType int) (*RecordResponse, error) {
+	params := url.Values{}
+	params.Set("secret", c.secret)
+	params.Set("app", app)
+	params.Set("stream", stream)
+	params.Set("type", fmt.Sprintf("%d", recordType))
+	params.Set("vhost", "__defaultVhost__")
+
+	resp, err := c.get("/index/api/stopRecord", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var result RecordResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// IsRecording 查询录制状态
+func (c *Client) IsRecording(app, stream string, recordType int) (*RecordStatusResponse, error) {
+	params := url.Values{}
+	params.Set("secret", c.secret)
+	params.Set("app", app)
+	params.Set("stream", stream)
+	params.Set("type", fmt.Sprintf("%d", recordType))
+	params.Set("vhost", "__defaultVhost__")
+
+	resp, err := c.get("/index/api/isRecording", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var result RecordStatusResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
 func (c *Client) get(path string, params url.Values) ([]byte, error) {
 	reqURL := fmt.Sprintf("%s%s?%s", c.baseURL, path, params.Encode())
 
@@ -142,6 +218,25 @@ type CommonResponse struct {
 
 // ServerConfigResponse 服务器配置响应
 type ServerConfigResponse struct {
-	Code int                    `json:"code"`
-	Data []map[string]string    `json:"data"`
+	Code int                 `json:"code"`
+	Data []map[string]string `json:"data"`
 }
+
+// RecordResponse 录制操作响应
+type RecordResponse struct {
+	Code   int    `json:"code"`
+	Result bool   `json:"result"`
+	Msg    string `json:"msg"`
+}
+
+// RecordStatusResponse 录制状态响应
+type RecordStatusResponse struct {
+	Code   int  `json:"code"`
+	Status bool `json:"status"` // true 表示正在录制
+}
+
+// 录制类型常量
+const (
+	RecordTypeHLS = 0 // HLS 录制
+	RecordTypeMP4 = 1 // MP4 录制
+)
