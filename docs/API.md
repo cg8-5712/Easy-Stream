@@ -1,8 +1,9 @@
-# Easy-Stream API 文档
+# Easy-Stream API 文档 v2.0
 
 ## 目录
 
 - [基本信息](#基本信息)
+- [认证机制](#认证机制)
 - [认证接口](#1-认证接口)
 - [推流管理接口](#2-推流管理接口)
 - [系统接口](#3-系统接口)
@@ -14,17 +15,39 @@
 
 ## 基本信息
 
-- **Base URL**: `http://localhost:8080/api/v1`
-- **认证方式**: JWT Bearer Token
-- **Content-Type**: `application/json`
-- **字符编码**: UTF-8
+| 项目 | 说明 |
+|------|------|
+| Base URL | `http://localhost:8080/api/v1` |
+| 认证方式 | JWT Bearer Token (Access Token + Refresh Token) |
+| Content-Type | `application/json` |
+| 字符编码 | UTF-8 |
 
-### 认证说明
+---
 
-除了公开接口外，所有接口都需要在 HTTP Header 中携带 JWT Token：
+## 认证机制
+
+### Token 说明
+
+本系统采用双 Token 机制：
+
+| Token 类型 | 有效期 | 用途 |
+|-----------|--------|------|
+| Access Token | 2 小时 | 访问 API 接口 |
+| Refresh Token | 7 天 | 刷新 Access Token |
+
+### 认证流程
 
 ```
-Authorization: Bearer {your_jwt_token}
+1. 用户登录 → 获取 access_token + refresh_token
+2. 使用 access_token 访问 API
+3. access_token 过期前，使用 refresh_token 获取新的 token 对
+4. refresh_token 过期后，需要重新登录
+```
+
+### 请求头格式
+
+```
+Authorization: Bearer {access_token}
 ```
 
 ---
@@ -33,10 +56,7 @@ Authorization: Bearer {your_jwt_token}
 
 ### 1.1 用户登录
 
-用户通过用户名和密码登录系统，获取 JWT Token。
-
 **接口地址**
-
 ```
 POST /api/v1/auth/login
 ```
@@ -49,7 +69,6 @@ POST /api/v1/auth/login
 | password | string | 是 | 密码 |
 
 **请求示例**
-
 ```json
 {
   "username": "admin",
@@ -57,23 +76,30 @@ POST /api/v1/auth/login
 }
 ```
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "1_a1b2c3d4e5f6...",
+  "expires_in": 7200,
   "user": {
     "id": 1,
     "username": "admin",
     "role": "admin",
+    "email": "admin@example.com",
+    "phone": "13800138000",
+    "real_name": "系统管理员",
+    "avatar": "",
+    "department": "技术部",
+    "status": "active",
+    "last_login_at": "2024-01-01T12:00:00Z",
     "created_at": "2024-01-01T00:00:00Z",
-    "updated_at": "2024-01-01T00:00:00Z"
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
 
-失败 (401 Unauthorized):
+**错误响应** (401 Unauthorized)
 ```json
 {
   "error": "invalid credentials"
@@ -82,25 +108,65 @@ POST /api/v1/auth/login
 
 ---
 
-### 1.2 用户登出
-
-用户退出登录。
+### 1.2 刷新令牌
 
 **接口地址**
+```
+POST /api/v1/auth/refresh
+```
 
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| refresh_token | string | 是 | 刷新令牌 |
+
+**请求示例**
+```json
+{
+  "refresh_token": "1_a1b2c3d4e5f6..."
+}
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "1_new_token...",
+  "expires_in": 7200
+}
+```
+
+**错误响应** (401 Unauthorized)
+```json
+{
+  "error": "invalid or expired refresh token"
+}
+```
+
+---
+
+### 1.3 用户登出
+
+**接口地址**
 ```
 POST /api/v1/auth/logout
 ```
 
-**请求头**
+**请求参数**
 
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| refresh_token | string | 否 | 刷新令牌（用于撤销） |
+
+**请求示例**
+```json
+{
+  "refresh_token": "1_a1b2c3d4e5f6..."
+}
 ```
-Authorization: Bearer {token}
-```
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
   "message": "logged out"
@@ -109,32 +175,33 @@ Authorization: Bearer {token}
 
 ---
 
-### 1.3 获取当前用户信息
-
-获取当前登录用户的详细信息。
+### 1.4 获取当前用户信息
 
 **接口地址**
-
 ```
 GET /api/v1/auth/profile
 ```
 
 **请求头**
-
 ```
-Authorization: Bearer {token}
+Authorization: Bearer {access_token}
 ```
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
   "id": 1,
   "username": "admin",
   "role": "admin",
+  "email": "admin@example.com",
+  "phone": "13800138000",
+  "real_name": "系统管理员",
+  "avatar": "",
+  "department": "技术部",
+  "status": "active",
+  "last_login_at": "2024-01-01T12:00:00Z",
   "created_at": "2024-01-01T00:00:00Z",
-  "updated_at": "2024-01-01T00:00:00Z"
+  "updated_at": "2024-01-01T12:00:00Z"
 }
 ```
 
@@ -142,41 +209,30 @@ Authorization: Bearer {token}
 
 ## 2. 推流管理接口
 
-> 所有推流管理接口都需要 JWT 认证
-
 ### 2.1 获取推流列表
 
-分页获取推流列表，支持按状态过滤。
+> 游客可访问，但只能看到公开直播；管理员可看到所有直播
 
 **接口地址**
-
 ```
 GET /api/v1/streams
-```
-
-**请求头**
-
-```
-Authorization: Bearer {token}
 ```
 
 **查询参数**
 
 | 参数名 | 类型 | 必填 | 默认值 | 说明 |
 |--------|------|------|--------|------|
-| status | string | 否 | - | 流状态过滤：`idle` / `pushing` / `destroyed` |
-| page | integer | 否 | 1 | 页码 |
-| pageSize | integer | 否 | 20 | 每页数量 |
+| status | string | 否 | - | 状态过滤：`idle`/`pushing`/`destroyed` |
+| visibility | string | 否 | - | 可见性过滤：`public`/`private`（仅管理员有效） |
+| page | int | 否 | 1 | 页码 |
+| pageSize | int | 否 | 20 | 每页数量 |
 
 **请求示例**
-
 ```
 GET /api/v1/streams?status=pushing&page=1&pageSize=20
 ```
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
   "total": 100,
@@ -184,28 +240,25 @@ GET /api/v1/streams?status=pushing&page=1&pageSize=20
     {
       "id": 1,
       "stream_key": "abc123def456",
-      "name": "会议室直播",
+      "name": "技术分享会",
+      "description": "每周技术分享直播",
       "device_id": "camera-001",
       "status": "pushing",
+      "visibility": "public",
       "protocol": "rtmp",
       "bitrate": 2500,
       "fps": 30,
-      "last_frame_at": "2024-01-01T12:00:00Z",
+      "streamer_name": "张三",
+      "streamer_contact": "13800138000",
+      "scheduled_start_time": "2024-01-01T14:00:00Z",
+      "scheduled_end_time": "2024-01-01T16:00:00Z",
+      "auto_kick_delay": 30,
+      "actual_start_time": "2024-01-01T14:05:00Z",
+      "actual_end_time": null,
+      "last_frame_at": "2024-01-01T15:30:00Z",
+      "created_by": 1,
       "created_at": "2024-01-01T10:00:00Z",
-      "updated_at": "2024-01-01T12:00:00Z"
-    },
-    {
-      "id": 2,
-      "stream_key": "xyz789ghi012",
-      "name": "监控摄像头",
-      "device_id": "camera-002",
-      "status": "idle",
-      "protocol": "",
-      "bitrate": 0,
-      "fps": 0,
-      "last_frame_at": null,
-      "created_at": "2024-01-01T09:00:00Z",
-      "updated_at": "2024-01-01T09:00:00Z"
+      "updated_at": "2024-01-01T14:05:00Z"
     }
   ]
 }
@@ -213,141 +266,176 @@ GET /api/v1/streams?status=pushing&page=1&pageSize=20
 
 ---
 
-### 2.2 创建推流码
-
-创建新的推流码，用于推流认证。
+### 2.2 创建推流码（管理员）
 
 **接口地址**
-
 ```
 POST /api/v1/streams
 ```
 
 **请求头**
-
 ```
-Authorization: Bearer {token}
+Authorization: Bearer {access_token}
 ```
 
 **请求参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| name | string | 是 | 推流名称 |
+| name | string | 是 | 直播名称 |
+| description | string | 否 | 直播描述 |
 | device_id | string | 否 | 设备 ID |
+| visibility | string | 是 | 可见性：`public`/`private` |
+| password | string | 条件必填 | 私有直播密码（visibility=private 时必填） |
+| streamer_name | string | 是 | 直播人员姓名 |
+| streamer_contact | string | 否 | 直播人员联系方式 |
+| scheduled_start_time | datetime | 是 | 预计开始时间 (ISO 8601) |
+| scheduled_end_time | datetime | 是 | 预计结束时间 (ISO 8601) |
+| auto_kick_delay | int | 否 | 超时断流延迟（分钟），默认 30 |
 
 **请求示例**
-
 ```json
 {
-  "name": "会议室直播",
-  "device_id": "camera-001"
+  "name": "技术分享会",
+  "description": "每周技术分享直播",
+  "device_id": "camera-001",
+  "visibility": "public",
+  "streamer_name": "张三",
+  "streamer_contact": "13800138000",
+  "scheduled_start_time": "2024-01-01T14:00:00Z",
+  "scheduled_end_time": "2024-01-01T16:00:00Z",
+  "auto_kick_delay": 30
 }
 ```
 
-**响应示例**
+**私有直播请求示例**
+```json
+{
+  "name": "内部会议",
+  "visibility": "private",
+  "password": "meeting123",
+  "streamer_name": "李四",
+  "scheduled_start_time": "2024-01-01T14:00:00Z",
+  "scheduled_end_time": "2024-01-01T16:00:00Z"
+}
+```
 
-成功 (201 Created):
+**响应示例** (201 Created)
 ```json
 {
   "id": 1,
   "stream_key": "abc123def456",
-  "name": "会议室直播",
+  "name": "技术分享会",
+  "description": "每周技术分享直播",
   "device_id": "camera-001",
   "status": "idle",
+  "visibility": "public",
   "protocol": "",
   "bitrate": 0,
   "fps": 0,
+  "streamer_name": "张三",
+  "streamer_contact": "13800138000",
+  "scheduled_start_time": "2024-01-01T14:00:00Z",
+  "scheduled_end_time": "2024-01-01T16:00:00Z",
+  "auto_kick_delay": 30,
+  "actual_start_time": null,
+  "actual_end_time": null,
   "last_frame_at": null,
+  "created_by": 1,
   "created_at": "2024-01-01T10:00:00Z",
   "updated_at": "2024-01-01T10:00:00Z"
 }
 ```
 
 **推流地址**
-
-创建成功后，可使用以下地址进行推流：
-
-- **RTMP**: `rtmp://{server}:1935/live/{stream_key}`
-- **RTSP**: `rtsp://{server}:8554/live/{stream_key}`
-- **SRT**: `srt://{server}:9000?streamid=#!::r=live/{stream_key},m=publish`
+- RTMP: `rtmp://{server}:1935/live/{stream_key}`
+- RTSP: `rtsp://{server}:8554/live/{stream_key}`
+- SRT: `srt://{server}:9000?streamid=#!::r=live/{stream_key},m=publish`
 
 **播放地址**
-
-- **WebRTC**: `webrtc://{server}:8000/live/{stream_key}`
+- WebRTC: `webrtc://{server}:8000/live/{stream_key}`
 
 ---
 
 ### 2.3 获取推流详情
 
-根据推流密钥获取推流的详细信息。
+> 游客可访问公开直播；私有直播需要 access_token 或管理员权限
 
 **接口地址**
-
 ```
 GET /api/v1/streams/:key
-```
-
-**请求头**
-
-```
-Authorization: Bearer {token}
 ```
 
 **路径参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| key | string | 是 | 推流密钥 (stream_key) |
+| key | string | 是 | 推流密钥 |
+
+**查询参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| access_token | string | 否 | 私有直播访问令牌（通过密码验证获取） |
 
 **请求示例**
-
 ```
 GET /api/v1/streams/abc123def456
+GET /api/v1/streams/abc123def456?access_token=xyz789...
 ```
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
   "id": 1,
   "stream_key": "abc123def456",
-  "name": "会议室直播",
+  "name": "技术分享会",
+  "description": "每周技术分享直播",
   "device_id": "camera-001",
   "status": "pushing",
+  "visibility": "public",
   "protocol": "rtmp",
   "bitrate": 2500,
   "fps": 30,
-  "last_frame_at": "2024-01-01T12:00:00Z",
+  "streamer_name": "张三",
+  "streamer_contact": "13800138000",
+  "scheduled_start_time": "2024-01-01T14:00:00Z",
+  "scheduled_end_time": "2024-01-01T16:00:00Z",
+  "auto_kick_delay": 30,
+  "actual_start_time": "2024-01-01T14:05:00Z",
+  "actual_end_time": null,
+  "last_frame_at": "2024-01-01T15:30:00Z",
+  "created_by": 1,
   "created_at": "2024-01-01T10:00:00Z",
-  "updated_at": "2024-01-01T12:00:00Z"
+  "updated_at": "2024-01-01T14:05:00Z"
 }
 ```
 
-失败 (404 Not Found):
+**错误响应**
+
+404 Not Found:
 ```json
 {
   "error": "stream not found"
 }
 ```
 
+403 Forbidden (私有直播无权限):
+```json
+{
+  "error": "private stream requires password"
+}
+```
+
 ---
 
-### 2.4 更新推流信息
+### 2.4 验证私有直播密码（游客）
 
-更新推流的名称或设备 ID。
+> 游客通过此接口验证私有直播密码，获取访问令牌
 
 **接口地址**
-
 ```
-PUT /api/v1/streams/:key
-```
-
-**请求头**
-
-```
-Authorization: Bearer {token}
+POST /api/v1/streams/:key/verify
 ```
 
 **路径参数**
@@ -360,60 +448,51 @@ Authorization: Bearer {token}
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| name | string | 否 | 推流名称 |
-| device_id | string | 否 | 设备 ID |
+| password | string | 是 | 私有直播密码 |
 
 **请求示例**
-
 ```json
 {
-  "name": "新的直播名称",
-  "device_id": "camera-002"
+  "password": "meeting123"
 }
 ```
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
-  "id": 1,
   "stream_key": "abc123def456",
-  "name": "新的直播名称",
-  "device_id": "camera-002",
-  "status": "pushing",
-  "protocol": "rtmp",
-  "bitrate": 2500,
-  "fps": 30,
-  "last_frame_at": "2024-01-01T12:00:00Z",
-  "created_at": "2024-01-01T10:00:00Z",
-  "updated_at": "2024-01-01T12:05:00Z"
+  "token": "xyz789abc123...",
+  "expires_at": "2024-01-01T18:00:00Z"
 }
 ```
 
-失败 (404 Not Found):
+**使用方式**
+
+获取 token 后，可通过以下方式访问私有直播：
+1. 查询参数：`GET /api/v1/streams/:key?access_token={token}`
+2. 分享链接：`https://example.com/live/{stream_key}?access_token={token}`
+
+**错误响应**
+
+401 Unauthorized:
 ```json
 {
-  "error": "stream not found"
+  "error": "invalid password"
 }
 ```
 
 ---
 
-### 2.5 删除推流码
-
-删除指定的推流码。
+### 2.5 更新推流信息（管理员）
 
 **接口地址**
-
 ```
-DELETE /api/v1/streams/:key
+PUT /api/v1/streams/:key
 ```
 
 **请求头**
-
 ```
-Authorization: Bearer {token}
+Authorization: Bearer {access_token}
 ```
 
 **路径参数**
@@ -422,15 +501,55 @@ Authorization: Bearer {token}
 |--------|------|------|------|
 | key | string | 是 | 推流密钥 |
 
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| name | string | 否 | 直播名称 |
+| description | string | 否 | 直播描述 |
+| device_id | string | 否 | 设备 ID |
+| visibility | string | 否 | 可见性：`public`/`private` |
+| password | string | 否 | 私有直播密码 |
+| streamer_name | string | 否 | 直播人员姓名 |
+| streamer_contact | string | 否 | 直播人员联系方式 |
+| scheduled_start_time | datetime | 否 | 预计开始时间 |
+| scheduled_end_time | datetime | 否 | 预计结束时间 |
+| auto_kick_delay | int | 否 | 超时断流延迟（分钟） |
+
 **请求示例**
-
+```json
+{
+  "name": "技术分享会（更新）",
+  "scheduled_end_time": "2024-01-01T17:00:00Z",
+  "auto_kick_delay": 60
+}
 ```
-DELETE /api/v1/streams/abc123def456
+
+**响应示例** (200 OK)
+```json
+{
+  "id": 1,
+  "stream_key": "abc123def456",
+  "name": "技术分享会（更新）",
+  ...
+}
 ```
 
-**响应示例**
+---
 
-成功 (200 OK):
+### 2.6 删除推流码（管理员）
+
+**接口地址**
+```
+DELETE /api/v1/streams/:key
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**响应示例** (200 OK)
 ```json
 {
   "message": "deleted"
@@ -439,47 +558,22 @@ DELETE /api/v1/streams/abc123def456
 
 ---
 
-### 2.6 强制断流
-
-强制断开正在推流的流。
+### 2.7 强制断流（管理员）
 
 **接口地址**
-
 ```
 POST /api/v1/streams/:key/kick
 ```
 
 **请求头**
-
 ```
-Authorization: Bearer {token}
-```
-
-**路径参数**
-
-| 参数名 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| key | string | 是 | 推流密钥 |
-
-**请求示例**
-
-```
-POST /api/v1/streams/abc123def456/kick
+Authorization: Bearer {access_token}
 ```
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
   "message": "kicked"
-}
-```
-
-失败 (404 Not Found):
-```json
-{
-  "error": "stream not found"
 }
 ```
 
@@ -489,19 +583,14 @@ POST /api/v1/streams/abc123def456/kick
 
 ### 3.1 健康检查
 
-检查服务是否正常运行。
-
 **接口地址**
-
 ```
 GET /api/v1/system/health
 ```
 
 **无需认证**
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
   "status": "ok"
@@ -510,25 +599,19 @@ GET /api/v1/system/health
 
 ---
 
-### 3.2 系统统计
-
-获取系统的统计信息。
+### 3.2 系统统计（管理员）
 
 **接口地址**
-
 ```
 GET /api/v1/system/stats
 ```
 
 **请求头**
-
 ```
-Authorization: Bearer {token}
+Authorization: Bearer {access_token}
 ```
 
-**响应示例**
-
-成功 (200 OK):
+**响应示例** (200 OK)
 ```json
 {
   "online_streams": 5,
@@ -536,43 +619,19 @@ Authorization: Bearer {token}
 }
 ```
 
-**字段说明**
-
-| 字段名 | 类型 | 说明 |
-|--------|------|------|
-| online_streams | integer | 当前在线推流数 |
-| total_streams | integer | 总推流数 |
-
 ---
 
 ## 4. ZLMediaKit Hook 接口
 
-> 这些接口由 ZLMediaKit 流媒体服务器调用，用于推流事件通知，无需认证。
+> 这些接口由 ZLMediaKit 流媒体服务器调用，无需认证
 
 ### 4.1 推流开始回调
-
-当有推流开始时，ZLMediaKit 会调用此接口进行鉴权。
-
-**接口地址**
 
 ```
 POST /api/v1/hooks/on_publish
 ```
 
-**请求参数**
-
-| 参数名 | 类型 | 说明 |
-|--------|------|------|
-| app | string | 应用名 (通常为 "live") |
-| stream | string | 流 ID (stream_key) |
-| schema | string | 推流协议 (rtmp/rtsp/srt) |
-| mediaServerId | string | 媒体服务器 ID |
-| ip | string | 推流客户端 IP |
-| port | integer | 推流客户端端口 |
-| params | string | 推流参数 |
-
 **请求示例**
-
 ```json
 {
   "app": "live",
@@ -580,14 +639,11 @@ POST /api/v1/hooks/on_publish
   "schema": "rtmp",
   "mediaServerId": "zlm-server-1",
   "ip": "192.168.1.100",
-  "port": 12345,
-  "params": ""
+  "port": 12345
 }
 ```
 
 **响应示例**
-
-允许推流 (200 OK):
 ```json
 {
   "code": 0,
@@ -595,189 +651,27 @@ POST /api/v1/hooks/on_publish
 }
 ```
 
-拒绝推流 (200 OK, code != 0):
-```json
-{
-  "code": -1,
-  "msg": "invalid stream key"
-}
-```
-
-**说明**
-
-- 返回 `code: 0` 表示允许推流
-- 返回 `code: -1` 或其他非 0 值表示拒绝推流
-
----
-
 ### 4.2 推流结束回调
-
-当推流结束时，ZLMediaKit 会调用此接口通知。
-
-**接口地址**
 
 ```
 POST /api/v1/hooks/on_unpublish
 ```
 
-**请求参数**
-
-| 参数名 | 类型 | 说明 |
-|--------|------|------|
-| app | string | 应用名 |
-| stream | string | 流 ID |
-| schema | string | 推流协议 |
-| mediaServerId | string | 媒体服务器 ID |
-
-**请求示例**
-
-```json
-{
-  "app": "live",
-  "stream": "abc123def456",
-  "schema": "rtmp",
-  "mediaServerId": "zlm-server-1"
-}
-```
-
-**响应示例**
-
-成功 (200 OK):
-```json
-{
-  "code": 0,
-  "msg": "success"
-}
-```
-
----
-
 ### 4.3 流量统计回调
-
-定期上报流量统计信息。
-
-**接口地址**
 
 ```
 POST /api/v1/hooks/on_flow_report
 ```
 
-**请求参数**
-
-| 参数名 | 类型 | 说明 |
-|--------|------|------|
-| app | string | 应用名 |
-| stream | string | 流 ID |
-| schema | string | 协议 |
-| mediaServerId | string | 媒体服务器 ID |
-| totalBytes | integer | 总流量 (字节) |
-| duration | integer | 持续时间 (秒) |
-| player | boolean | 是否为播放器 |
-| totalBytesIn | integer | 上行流量 (字节) |
-| totalBytesOut | integer | 下行流量 (字节) |
-
-**请求示例**
-
-```json
-{
-  "app": "live",
-  "stream": "abc123def456",
-  "schema": "rtmp",
-  "mediaServerId": "zlm-server-1",
-  "totalBytes": 1048576,
-  "duration": 60,
-  "player": false,
-  "totalBytesIn": 1048576,
-  "totalBytesOut": 0
-}
-```
-
-**响应示例**
-
-成功 (200 OK):
-```json
-{
-  "code": 0,
-  "msg": "success"
-}
-```
-
----
-
 ### 4.4 无人观看回调
-
-当流无人观看时，ZLMediaKit 会调用此接口询问是否关闭流。
-
-**接口地址**
 
 ```
 POST /api/v1/hooks/on_stream_none_reader
 ```
 
-**请求参数**
-
-| 参数名 | 类型 | 说明 |
-|--------|------|------|
-| app | string | 应用名 |
-| stream | string | 流 ID |
-| schema | string | 协议 |
-| mediaServerId | string | 媒体服务器 ID |
-
-**请求示例**
-
-```json
-{
-  "app": "live",
-  "stream": "abc123def456",
-  "schema": "rtmp",
-  "mediaServerId": "zlm-server-1"
-}
-```
-
-**响应示例**
-
-不关闭流 (200 OK):
-```json
-{
-  "code": 0,
-  "close": false
-}
-```
-
-关闭流 (200 OK):
-```json
-{
-  "code": 0,
-  "close": true
-}
-```
-
-**说明**
-
-- `close: false` 表示保持流继续运行
-- `close: true` 表示关闭流
-
 ---
 
 ## 数据模型
-
-### Stream (推流)
-
-```typescript
-{
-  id: number              // 推流 ID
-  stream_key: string      // 推流密钥 (唯一标识)
-  name: string            // 推流名称
-  device_id: string       // 设备 ID
-  status: string          // 状态: idle (空闲) / pushing (推流中) / destroyed (已销毁)
-  protocol: string        // 推流协议: rtmp / rtsp / srt
-  bitrate: number         // 码率 (kbps)
-  fps: number             // 帧率
-  last_frame_at: string   // 最后一帧时间 (ISO 8601 格式)
-  created_at: string      // 创建时间 (ISO 8601 格式)
-  updated_at: string      // 更新时间 (ISO 8601 格式)
-}
-```
 
 ### User (用户)
 
@@ -785,36 +679,54 @@ POST /api/v1/hooks/on_stream_none_reader
 {
   id: number              // 用户 ID
   username: string        // 用户名
-  role: string            // 角色: admin (管理员) / operator (操作员) / viewer (观察者)
-  created_at: string      // 创建时间 (ISO 8601 格式)
-  updated_at: string      // 更新时间 (ISO 8601 格式)
+  role: string            // 角色: admin / operator / viewer
+  email: string           // 邮箱
+  phone: string           // 电话
+  real_name: string       // 真实姓名
+  avatar: string          // 头像 URL
+  department: string      // 部门
+  status: string          // 状态: active / disabled
+  last_login_at: string   // 最后登录时间
+  created_at: string      // 创建时间
+  updated_at: string      // 更新时间
 }
 ```
 
-### StreamListResponse (推流列表响应)
+### Stream (推流)
 
 ```typescript
 {
-  total: number           // 总记录数
-  streams: Stream[]       // 推流列表
+  id: number                    // 推流 ID
+  stream_key: string            // 推流密钥
+  name: string                  // 直播名称
+  description: string           // 直播描述
+  device_id: string             // 设备 ID
+  status: string                // 状态: idle / pushing / destroyed
+  visibility: string            // 可见性: public / private
+  protocol: string              // 协议: rtmp / rtsp / srt
+  bitrate: number               // 码率 (kbps)
+  fps: number                   // 帧率
+  streamer_name: string         // 直播人员姓名
+  streamer_contact: string      // 直播人员联系方式
+  scheduled_start_time: string  // 预计开始时间
+  scheduled_end_time: string    // 预计结束时间
+  auto_kick_delay: number       // 超时断流延迟（分钟）
+  actual_start_time: string     // 实际开始时间
+  actual_end_time: string       // 实际结束时间
+  last_frame_at: string         // 最后一帧时间
+  created_by: number            // 创建者用户 ID
+  created_at: string            // 创建时间
+  updated_at: string            // 更新时间
 }
 ```
 
-### LoginResponse (登录响应)
+### StreamAccessToken (私有直播访问令牌)
 
 ```typescript
 {
-  token: string           // JWT Token
-  user: User              // 用户信息
-}
-```
-
-### HookResponse (Hook 响应)
-
-```typescript
-{
-  code: number            // 响应码: 0 表示成功，非 0 表示失败
-  msg: string             // 响应消息
+  stream_key: string      // 推流密钥
+  token: string           // 访问令牌
+  expires_at: string      // 过期时间
 }
 ```
 
@@ -822,206 +734,42 @@ POST /api/v1/hooks/on_stream_none_reader
 
 ## 错误码
 
-### HTTP 状态码
-
-| 状态码 | 说明 |
-|--------|------|
-| 200 | 请求成功 |
+| HTTP 状态码 | 说明 |
+|------------|------|
+| 200 | 成功 |
 | 201 | 创建成功 |
 | 400 | 请求参数错误 |
-| 401 | 未授权 / Token 无效或过期 |
+| 401 | 未授权 / Token 无效 |
+| 403 | 禁止访问（如私有直播无权限） |
 | 404 | 资源不存在 |
 | 500 | 服务器内部错误 |
 
-### 业务错误码
-
-错误响应格式：
-
-```json
-{
-  "error": "错误描述信息"
-}
-```
-
-常见错误信息：
+### 常见错误信息
 
 | 错误信息 | 说明 |
 |---------|------|
 | invalid credentials | 用户名或密码错误 |
+| invalid or expired refresh token | 刷新令牌无效或已过期 |
 | stream not found | 推流不存在 |
-| invalid token | Token 无效 |
-| token expired | Token 已过期 |
+| private stream requires password | 私有直播需要密码 |
+| invalid password | 密码错误 |
 
 ---
 
-## 使用示例
+## 超时自动断流机制
 
-### cURL 示例
+系统会每分钟检查正在推流的直播，当满足以下条件时自动断流：
 
-**1. 登录获取 Token**
-
-```bash
-curl -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "password": "admin123"
-  }'
+```
+当前时间 > 预计结束时间 + 超时延迟时间
 ```
 
-**2. 创建推流码**
+例如：
+- 预计结束时间：16:00
+- 超时延迟：30 分钟
+- 自动断流时间：16:30
 
-```bash
-curl -X POST http://localhost:8080/api/v1/streams \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{
-    "name": "会议室直播",
-    "device_id": "camera-001"
-  }'
-```
-
-**3. 获取推流列表**
-
-```bash
-curl -X GET "http://localhost:8080/api/v1/streams?status=pushing&page=1&pageSize=20" \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-**4. 强制断流**
-
-```bash
-curl -X POST http://localhost:8080/api/v1/streams/abc123def456/kick \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
----
-
-### JavaScript 示例
-
-**使用 Fetch API**
-
-```javascript
-// 登录
-async function login(username, password) {
-  const response = await fetch('http://localhost:8080/api/v1/auth/login', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ username, password }),
-  });
-
-  const data = await response.json();
-  return data.token;
-}
-
-// 获取推流列表
-async function getStreams(token, status = '', page = 1, pageSize = 20) {
-  const params = new URLSearchParams({
-    status,
-    page: page.toString(),
-    pageSize: pageSize.toString(),
-  });
-
-  const response = await fetch(`http://localhost:8080/api/v1/streams?${params}`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-
-  return await response.json();
-}
-
-// 创建推流码
-async function createStream(token, name, deviceId) {
-  const response = await fetch('http://localhost:8080/api/v1/streams', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      name,
-      device_id: deviceId,
-    }),
-  });
-
-  return await response.json();
-}
-
-// 使用示例
-(async () => {
-  const token = await login('admin', 'admin123');
-  const streams = await getStreams(token, 'pushing');
-  console.log(streams);
-})();
-```
-
----
-
-### Python 示例
-
-**使用 requests 库**
-
-```python
-import requests
-
-BASE_URL = "http://localhost:8080/api/v1"
-
-# 登录
-def login(username, password):
-    response = requests.post(
-        f"{BASE_URL}/auth/login",
-        json={"username": username, "password": password}
-    )
-    return response.json()["token"]
-
-# 获取推流列表
-def get_streams(token, status="", page=1, page_size=20):
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {"status": status, "page": page, "pageSize": page_size}
-
-    response = requests.get(
-        f"{BASE_URL}/streams",
-        headers=headers,
-        params=params
-    )
-    return response.json()
-
-# 创建推流码
-def create_stream(token, name, device_id=""):
-    headers = {"Authorization": f"Bearer {token}"}
-    data = {"name": name, "device_id": device_id}
-
-    response = requests.post(
-        f"{BASE_URL}/streams",
-        headers=headers,
-        json=data
-    )
-    return response.json()
-
-# 使用示例
-if __name__ == "__main__":
-    token = login("admin", "admin123")
-    streams = get_streams(token, status="pushing")
-    print(streams)
-```
-
----
-
-## 配置 ZLMediaKit Hook
-
-在 ZLMediaKit 配置文件中启用 Hook 回调：
-
-```ini
-[hook]
-enable=1
-on_publish=http://backend:8080/api/v1/hooks/on_publish
-on_unpublish=http://backend:8080/api/v1/hooks/on_unpublish
-on_flow_report=http://backend:8080/api/v1/hooks/on_flow_report
-on_stream_none_reader=http://backend:8080/api/v1/hooks/on_stream_none_reader
-```
+管理员可在创建或更新直播时设置 `auto_kick_delay` 参数。
 
 ---
 
@@ -1035,47 +783,5 @@ on_stream_none_reader=http://backend:8080/api/v1/hooks/on_stream_none_reader
 
 ---
 
-## 常见问题
-
-### Q: Token 有效期是多久？
-
-A: 默认 24 小时，可在配置文件中通过 `jwt.expireHour` 修改。
-
-### Q: 如何刷新 Token？
-
-A: 当前版本需要重新登录获取新 Token。
-
-### Q: 推流地址中的 {server} 应该填什么？
-
-A: 填写 ZLMediaKit 服务器的 IP 地址或域名。
-
-### Q: 支持哪些推流协议？
-
-A: 支持 RTMP、RTSP、SRT 三种协议。
-
-### Q: 播放延迟有多低？
-
-A: 使用 WebRTC 播放，延迟通常在 200ms 以内。
-
----
-
-## 更新日志
-
-### v1.0.0 (2024-01-01)
-
-- 初始版本发布
-- 支持推流管理
-- 支持 ZLMediaKit Hook 集成
-- 支持 JWT 认证
-
----
-
-## 联系方式
-
-- GitHub: https://github.com/yourusername/easy-stream
-- Issues: https://github.com/yourusername/easy-stream/issues
-
----
-
-**文档版本**: v1.0.0
+**文档版本**: v2.0
 **最后更新**: 2024-01-01
