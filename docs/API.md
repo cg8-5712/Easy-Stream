@@ -189,13 +189,10 @@ Authorization: Bearer {access_token}
 {
   "id": 1,
   "username": "admin",
-  "role": "admin",
   "email": "admin@example.com",
   "phone": "13800138000",
   "real_name": "系统管理员",
   "avatar": "",
-  "department": "技术部",
-  "status": "active",
   "last_login_at": "2024-01-01T12:00:00Z",
   "created_at": "2024-01-01T00:00:00Z",
   "updated_at": "2024-01-01T12:00:00Z"
