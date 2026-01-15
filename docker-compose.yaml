@@ -24,6 +24,12 @@ services:
       - ZLMEDIAKIT_HOST=zlmediakit
       - ZLMEDIAKIT_PORT=80
       - ZLMEDIAKIT_SECRET=035c73f7-bb6b-4889-a715-d9eb2d1925cc
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      # 本地存储路径（与 config.yaml 中 storage.targets[].localDir 对应）
+      - app_records:/app/data/records
+      # 挂载 ZLMediaKit 录制目录，用于读取原始录制文件
+      - zlm_record:/zlm/record:ro
     restart: unless-stopped
     networks:
       - easystream-net
@@ -114,6 +120,13 @@ volumes:
       o: bind
       type: none
       device: ./data/zlm/record
+  app_records:
+    name: easystream-app-records
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ./data/records
 
 networks:
   easystream-net:
