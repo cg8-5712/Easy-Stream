@@ -1,5 +1,22 @@
 -- Easy-Stream 数据库初始化脚本
 
+-- 创建版本迁移表（必须最先创建）
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version         INTEGER PRIMARY KEY,
+    description     VARCHAR(256) NOT NULL,
+    applied_at      TIMESTAMP DEFAULT NOW()
+);
+
+COMMENT ON TABLE schema_migrations IS '数据库版本迁移记录表';
+COMMENT ON COLUMN schema_migrations.version IS '版本号';
+COMMENT ON COLUMN schema_migrations.description IS '迁移描述';
+COMMENT ON COLUMN schema_migrations.applied_at IS '应用时间';
+
+-- 插入初始版本记录
+INSERT INTO schema_migrations (version, description)
+VALUES (1, '初始化数据库结构')
+ON CONFLICT (version) DO NOTHING;
+
 -- 创建用户表
 CREATE TABLE IF NOT EXISTS users (
     id              SERIAL PRIMARY KEY,
