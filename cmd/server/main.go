@@ -39,6 +39,13 @@ func main() {
 	}
 	defer rdb.Close()
 
+	// Debug 模式下插入种子数据
+	if cfg.Server.Mode == "debug" {
+		if err := repository.SeedData(db); err != nil {
+			log.Printf("Warning: Failed to seed data: %v", err)
+		}
+	}
+
 	// 初始化 Repository
 	streamRepo := repository.NewStreamRepository(db)
 	userRepo := repository.NewUserRepository(db)

@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(tree:*)",
-      "Bash(copy \"F:\\\\bian\\\\goproject\\\\Easy-Stream\\\\config.yaml\" \"F:\\\\bian\\\\goproject\\\\Easy-Stream\\\\config.yaml.example\")"
+      "Bash(copy \"F:\\\\bian\\\\goproject\\\\Easy-Stream\\\\config.yaml\" \"F:\\\\bian\\\\goproject\\\\Easy-Stream\\\\config.yaml.example\")",
+      "Bash(ssh:*)",
+      "Bash(where:*)",
+      "Bash(if [ -f ~/.ssh/id_rsa ])",
+      "Bash(then echo \"SSH密钥已存在\")",
+      "Bash(fi)",
+      "Bash(go build:*)"
     ]
   }
 }

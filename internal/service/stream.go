@@ -82,7 +82,7 @@ func (s *StreamService) Create(req *model.CreateStreamRequest, userID int64) (*m
 }
 
 // Get 获取推流信息（支持游客和管理员）
-func (s *StreamService) Get(key string, userRole string, accessToken string) (*model.Stream, error) {
+func (s *StreamService) Get(key string, isLoggedIn bool, accessToken string) (*model.Stream, error) {
 	stream, err := s.streamRepo.GetByKey(key)
 	if err != nil {
 		return nil, err
@@ -91,8 +91,8 @@ func (s *StreamService) Get(key string, userRole string, accessToken string) (*m
 		return nil, ErrStreamNotFound
 	}
 
-	// 管理员可以查看所有直播
-	if userRole == model.UserRoleAdmin || userRole == model.UserRoleOperator {
+	// 登录用户可以查看所有直播
+	if isLoggedIn {
 		return stream, nil
 	}
 
@@ -113,7 +113,7 @@ func (s *StreamService) Get(key string, userRole string, accessToken string) (*m
 }
 
 // List 获取推流列表（游客只能看公开且正在直播的，管理员能看所有）
-func (s *StreamService) List(req *model.StreamListRequest, userRole string) (*model.StreamListResponse, error) {
+func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool) (*model.StreamListResponse, error) {
 	if req.Page < 1 {
 		req.Page = 1
 	}
@@ -122,8 +122,8 @@ func (s *StreamService) List(req *model.StreamListRequest, userRole string) (*mo
 	}
 	offset := (req.Page - 1) * req.PageSize
 
-	// 游客只能看公开且正在直播的
-	if userRole != model.UserRoleAdmin && userRole != model.UserRoleOperator {
+	// 未登录用户只能看公开且正在直播的
+	if !isLoggedIn {
 		req.Visibility = model.StreamVisibilityPublic
 		req.Status = model.StreamStatusPushing
 		req.TimeRange = "" // 游客不能使用时间范围过滤

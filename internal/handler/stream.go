@@ -26,11 +26,8 @@ func (h *StreamHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
-	// 获取用户角色（如果已登录）
-	userRole, exists := c.Get("role")
-	if !exists {
-		userRole = "" // 游客
-	}
+	// 检查用户是否已登录
+	_, isLoggedIn := c.Get("user_id")
 
 	req := &model.StreamListRequest{
 		Status:     status,
@@ -40,7 +37,7 @@ func (h *StreamHandler) List(c *gin.Context) {
 		PageSize:   pageSize,
 	}
 
-	resp, err := h.streamSvc.List(req, userRole.(string))
+	resp, err := h.streamSvc.List(req, isLoggedIn)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -74,13 +71,10 @@ func (h *StreamHandler) Get(c *gin.Context) {
 	key := c.Param("key")
 	accessToken := c.Query("access_token")
 
-	// 获取用户角色
-	userRole, exists := c.Get("role")
-	if !exists {
-		userRole = "" // 游客
-	}
+	// 检查用户是否已登录
+	_, isLoggedIn := c.Get("user_id")
 
-	stream, err := h.streamSvc.Get(key, userRole.(string), accessToken)
+	stream, err := h.streamSvc.Get(key, isLoggedIn, accessToken)
 	if err != nil {
 		if err == service.ErrStreamNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})

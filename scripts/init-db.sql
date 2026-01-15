@@ -22,20 +22,16 @@ CREATE TABLE IF NOT EXISTS users (
     id              SERIAL PRIMARY KEY,
     username        VARCHAR(64) UNIQUE NOT NULL,
     password_hash   VARCHAR(256) NOT NULL,
-    role            VARCHAR(16) DEFAULT 'viewer',
     email           VARCHAR(128),
     phone           VARCHAR(32),
     real_name       VARCHAR(64),
     avatar          VARCHAR(256),
-    department      VARCHAR(64),
-    status          VARCHAR(16) DEFAULT 'active',
     last_login_at   TIMESTAMP,
     created_at      TIMESTAMP DEFAULT NOW(),
     updated_at      TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
 -- 创建推流表
 CREATE TABLE IF NOT EXISTS streams (
@@ -93,13 +89,13 @@ CREATE INDEX IF NOT EXISTS idx_logs_action ON operation_logs(action);
 
 -- 插入默认管理员用户 (密码: admin123)
 -- 密码使用 bcrypt 加密
-INSERT INTO users (username, password_hash, role, real_name, status)
-VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin', '系统管理员', 'active')
+INSERT INTO users (username, password_hash, real_name)
+VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '系统管理员')
 ON CONFLICT (username) DO NOTHING;
 
 -- 插入测试操作员用户 (密码: operator123)
-INSERT INTO users (username, password_hash, role, real_name, status)
-VALUES ('operator', '$2a$10$YourHashHere', 'operator', '操作员', 'active')
+INSERT INTO users (username, password_hash, real_name)
+VALUES ('operator', '$2a$10$YourHashHere', '操作员')
 ON CONFLICT (username) DO NOTHING;
 
 -- 添加注释
@@ -107,13 +103,10 @@ COMMENT ON TABLE users IS '用户表';
 COMMENT ON COLUMN users.id IS '用户ID';
 COMMENT ON COLUMN users.username IS '用户名';
 COMMENT ON COLUMN users.password_hash IS '密码哈希';
-COMMENT ON COLUMN users.role IS '角色：admin/operator/viewer';
 COMMENT ON COLUMN users.email IS '邮箱';
 COMMENT ON COLUMN users.phone IS '电话';
 COMMENT ON COLUMN users.real_name IS '真实姓名';
 COMMENT ON COLUMN users.avatar IS '头像URL';
-COMMENT ON COLUMN users.department IS '部门';
-COMMENT ON COLUMN users.status IS '状态：active/disabled';
 COMMENT ON COLUMN users.last_login_at IS '最后登录时间';
 
 COMMENT ON TABLE streams IS '推流表';
