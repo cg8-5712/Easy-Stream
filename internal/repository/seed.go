@@ -84,10 +84,13 @@ func seedStreams(db *sql.DB) error {
 		name        string
 		description string
 		visibility  string
+		status      string
 		streamer    string
 	}{
-		{"test-stream-001", "测试直播间1", "这是一个公开的测试直播间", "public", "测试主播A"},
-		{"test-stream-002", "测试直播间2", "这是一个私密的测试直播间", "private", "测试主播B"},
+		{"test-stream-001", "测试直播间1-正在直播", "这是一个正在直播的公开直播间", "public", "pushing", "测试主播A"},
+		{"test-stream-002", "测试直播间2-未开始", "这是一个未开始的公开直播间", "public", "idle", "测试主播B"},
+		{"test-stream-003", "测试直播间3-已结束", "这是一个已结束的公开直播间", "public", "ended", "测试主播C"},
+		{"test-stream-004", "测试直播间4-私密直播", "这是一个私密的测试直播间", "private", "pushing", "测试主播D"},
 	}
 
 	now := time.Now()
@@ -109,12 +112,12 @@ func seedStreams(db *sql.DB) error {
 		_, err = db.Exec(`
 			INSERT INTO streams (stream_key, name, description, visibility, status,
 				streamer_name, scheduled_start_time, scheduled_end_time, created_by, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, 'idle', $5, $6, $7, $8, $9, $9)
-		`, s.streamKey, s.name, s.description, s.visibility, s.streamer, scheduledStart, scheduledEnd, adminID, now)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+		`, s.streamKey, s.name, s.description, s.visibility, s.status, s.streamer, scheduledStart, scheduledEnd, adminID, now)
 		if err != nil {
 			return err
 		}
-		log.Printf("Debug模式: 创建直播流 %s (%s)", s.name, s.streamKey)
+		log.Printf("Debug模式: 创建直播流 %s (%s) - %s", s.name, s.streamKey, s.status)
 	}
 
 	return nil

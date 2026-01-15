@@ -174,7 +174,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 	}
 	defer rows.Close()
 
-	var streams []*model.Stream
+	streams := make([]*model.Stream, 0)
 	for rows.Next() {
 		s := &model.Stream{}
 		err := rows.Scan(
@@ -269,7 +269,7 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 	}
 	defer rows.Close()
 
-	var streams []*model.Stream
+	streams := make([]*model.Stream, 0)
 	for rows.Next() {
 		s := &model.Stream{}
 		err := rows.Scan(

@@ -49,7 +49,6 @@ func Auth(secret string) gin.HandlerFunc {
 		// 将用户信息存入上下文
 		c.Set("user_id", int64(claims["user_id"].(float64)))
 		c.Set("username", claims["username"].(string))
-		c.Set("role", claims["role"].(string))
 
 		c.Next()
 	}
