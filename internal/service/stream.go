@@ -60,15 +60,15 @@ func (s *StreamService) Create(req *model.CreateStreamRequest, userID int64) (*m
 	stream := &model.Stream{
 		StreamKey:          utils.GenerateStreamKey(),
 		Name:               req.Name,
-		Description:        req.Description,
-		DeviceID:           req.DeviceID,
+		Description:        strPtr(req.Description),
+		DeviceID:           strPtr(req.DeviceID),
 		Status:             model.StreamStatusIdle,
 		Visibility:         req.Visibility,
-		Password:           passwordHash,
+		Password:           strPtr(passwordHash),
 		RecordEnabled:      req.RecordEnabled,
 		RecordFiles:        model.StringArray{},
-		StreamerName:       req.StreamerName,
-		StreamerContact:    req.StreamerContact,
+		StreamerName:       strPtr(req.StreamerName),
+		StreamerContact:    strPtr(req.StreamerContact),
 		ScheduledStartTime: req.ScheduledStartTime,
 		ScheduledEndTime:   req.ScheduledEndTime,
 		AutoKickDelay:      autoKickDelay,
@@ -167,10 +167,10 @@ func (s *StreamService) Update(key string, req *model.UpdateStreamRequest) (*mod
 		stream.Name = req.Name
 	}
 	if req.Description != "" {
-		stream.Description = req.Description
+		stream.Description = strPtr(req.Description)
 	}
 	if req.DeviceID != "" {
-		stream.DeviceID = req.DeviceID
+		stream.DeviceID = strPtr(req.DeviceID)
 	}
 	if req.Visibility != "" {
 		stream.Visibility = req.Visibility
@@ -180,13 +180,13 @@ func (s *StreamService) Update(key string, req *model.UpdateStreamRequest) (*mod
 		if err != nil {
 			return nil, err
 		}
-		stream.Password = string(hash)
+		stream.Password = strPtr(string(hash))
 	}
 	if req.StreamerName != "" {
-		stream.StreamerName = req.StreamerName
+		stream.StreamerName = strPtr(req.StreamerName)
 	}
 	if req.StreamerContact != "" {
-		stream.StreamerContact = req.StreamerContact
+		stream.StreamerContact = strPtr(req.StreamerContact)
 	}
 	if req.ScheduledStartTime != nil {
 		stream.ScheduledStartTime = req.ScheduledStartTime
@@ -265,7 +265,10 @@ func (s *StreamService) VerifyPassword(key, password string) (*model.StreamAcces
 	}
 
 	// 验证密码
-	if err := bcrypt.CompareHashAndPassword([]byte(stream.Password), []byte(password)); err != nil {
+	if stream.Password == nil || *stream.Password == "" {
+		return nil, ErrInvalidPassword
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(*stream.Password), []byte(password)); err != nil {
 		return nil, ErrInvalidPassword
 	}
 
@@ -305,7 +308,7 @@ func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 	// 更新状态和实际开始时间
 	now := time.Now()
 	stream.Status = model.StreamStatusPushing
-	stream.Protocol = req.Schema
+	stream.Protocol = strPtr(req.Schema)
 	stream.ActualStartTime = &now
 
 	if err := s.streamRepo.Update(stream); err != nil {
@@ -414,4 +417,9 @@ func (s *StreamService) generateAccessToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// strPtr 将字符串转换为指针
+func strPtr(s string) *string {
+	return &s
 }

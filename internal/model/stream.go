@@ -36,18 +36,18 @@ type Stream struct {
 	ID                 int64       `json:"id" db:"id"`
 	StreamKey          string      `json:"stream_key" db:"stream_key"`
 	Name               string      `json:"name" db:"name"`
-	Description        string      `json:"description" db:"description"`
-	DeviceID           string      `json:"device_id" db:"device_id"`
+	Description        *string     `json:"description" db:"description"`
+	DeviceID           *string     `json:"device_id" db:"device_id"`
 	Status             string      `json:"status" db:"status"`                 // idle / pushing / ended
 	Visibility         string      `json:"visibility" db:"visibility"`         // public / private
-	Password           string      `json:"-" db:"password"`                    // 私有直播密码
+	Password           *string     `json:"-" db:"password"`                    // 私有直播密码
 	RecordEnabled      bool        `json:"record_enabled" db:"record_enabled"` // 是否开启录制
 	RecordFiles        StringArray `json:"record_files" db:"record_files"`     // 录制文件路径列表
-	Protocol           string      `json:"protocol" db:"protocol"`
-	Bitrate            int         `json:"bitrate" db:"bitrate"`
-	FPS                int         `json:"fps" db:"fps"`
-	StreamerName       string      `json:"streamer_name" db:"streamer_name"`               // 直播人员姓名
-	StreamerContact    string      `json:"streamer_contact" db:"streamer_contact"`         // 直播人员联系方式
+	Protocol           *string     `json:"protocol" db:"protocol"`
+	Bitrate            *int        `json:"bitrate" db:"bitrate"`
+	FPS                *int        `json:"fps" db:"fps"`
+	StreamerName       *string     `json:"streamer_name" db:"streamer_name"`               // 直播人员姓名
+	StreamerContact    *string     `json:"streamer_contact" db:"streamer_contact"`         // 直播人员联系方式
 	ScheduledStartTime *time.Time  `json:"scheduled_start_time" db:"scheduled_start_time"` // 预计开始时间
 	ScheduledEndTime   *time.Time  `json:"scheduled_end_time" db:"scheduled_end_time"`     // 预计结束时间
 	AutoKickDelay      int         `json:"auto_kick_delay" db:"auto_kick_delay"`           // 超时自动断流延迟（分钟）
