@@ -65,6 +65,20 @@ type OnPlayerDisconnectRequest struct {
 	ID         string `json:"id"` // 播放器唯一标识
 }
 
+// OnRecordMP4Request 录制完成回调
+type OnRecordMP4Request struct {
+	App        string  `json:"app"`
+	Stream     string  `json:"stream"`
+	MediaSrvID string  `json:"mediaServerId"`
+	FileName   string  `json:"file_name"`   // 文件名
+	FilePath   string  `json:"file_path"`   // 文件绝对路径
+	FileSize   int64   `json:"file_size"`   // 文件大小（字节）
+	Folder     string  `json:"folder"`      // 文件所在目录
+	StartTime  int64   `json:"start_time"`  // 录制开始时间戳
+	TimeLen    float64 `json:"time_len"`    // 录制时长（秒）
+	URL        string  `json:"url"`         // 播放地址
+}
+
 // HookResponse Hook 响应
 type HookResponse struct {
 	Code int    `json:"code"`

@@ -28,3 +28,49 @@ zlmediakit:
 
 log:
   level: "info"
+
+# 存储配置（支持多个存储目标）
+storage:
+  targets:
+    # 本地存储
+    - name: "local"
+      type: "local"
+      enabled: true
+      default: true
+      localDir: "./data/records"
+
+    # AWS S3 示例（取消注释启用）
+    # - name: "aws-s3"
+    #   type: "s3"
+    #   enabled: false
+    #   endpoint: ""  # 留空使用默认AWS端点
+    #   region: "us-east-1"
+    #   bucket: "your-bucket-name"
+    #   accessKeyId: "your-access-key"
+    #   secretAccessKey: "your-secret-key"
+    #   pathPrefix: "recordings"
+    #   customDomain: ""
+
+    # 腾讯云 COS 示例
+    # - name: "tencent-cos"
+    #   type: "cos"
+    #   enabled: false
+    #   endpoint: "https://cos.ap-guangzhou.myqcloud.com"
+    #   region: "ap-guangzhou"
+    #   bucket: "your-bucket-name"
+    #   accessKeyId: "your-secret-id"
+    #   secretAccessKey: "your-secret-key"
+    #   pathPrefix: "recordings"
+    #   customDomain: "https://your-cdn.example.com"
+
+    # 阿里云 OSS 示例
+    # - name: "aliyun-oss"
+    #   type: "oss"
+    #   enabled: false
+    #   endpoint: "https://oss-cn-hangzhou.aliyuncs.com"
+    #   region: "cn-hangzhou"
+    #   bucket: "your-bucket-name"
+    #   accessKeyId: "your-access-key-id"
+    #   secretAccessKey: "your-access-key-secret"
+    #   pathPrefix: "recordings"
+    #   customDomain: ""

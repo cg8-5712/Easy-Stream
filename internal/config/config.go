@@ -11,6 +11,7 @@ type Config struct {
 	JWT        JWTConfig
 	ZLMediaKit ZLMediaKitConfig
 	Log        LogConfig
+	Storage    StorageConfig
 }
 
 type ServerConfig struct {
@@ -48,6 +49,28 @@ type ZLMediaKitConfig struct {
 
 type LogConfig struct {
 	Level string // debug / info / warn / error
+}
+
+// StorageConfig 存储配置
+type StorageConfig struct {
+	Targets []StorageTarget `mapstructure:"targets"` // 多个存储目标
+}
+
+// StorageTarget 存储目标配置
+type StorageTarget struct {
+	Name     string `mapstructure:"name"`     // 存储名称标识
+	Type     string `mapstructure:"type"`     // 类型: local / s3 / cos / oss
+	Enabled  bool   `mapstructure:"enabled"`  // 是否启用
+	Default  bool   `mapstructure:"default"`  // 是否为默认存储
+	LocalDir string `mapstructure:"localDir"` // 本地存储目录（type=local时使用）
+	// S3 兼容存储配置（S3/COS/OSS 通用）
+	Endpoint        string `mapstructure:"endpoint"`        // 端点地址
+	Region          string `mapstructure:"region"`          // 区域
+	Bucket          string `mapstructure:"bucket"`          // 存储桶名称
+	AccessKeyID     string `mapstructure:"accessKeyId"`     // 访问密钥ID
+	SecretAccessKey string `mapstructure:"secretAccessKey"` // 访问密钥
+	PathPrefix      string `mapstructure:"pathPrefix"`      // 存储路径前缀
+	CustomDomain    string `mapstructure:"customDomain"`    // 自定义域名（用于生成访问URL）
 }
 
 func Load() (*Config, error) {

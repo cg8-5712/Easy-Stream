@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # Easy-Stream 后端服务
+  easy-stream:
+    build: .
+    container_name: easy-stream
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+      - zlmediakit
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=easystream
+      - DATABASE_PASSWORD=easystream123
+      - DATABASE_DBNAME=easystream
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ZLMEDIAKIT_HOST=zlmediakit
+      - ZLMEDIAKIT_PORT=80
+      - ZLMEDIAKIT_SECRET=035c73f7-bb6b-4889-a715-d9eb2d1925cc
+    restart: unless-stopped
+    networks:
+      - easystream-net
+
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: easystream-postgres
+    environment:
+      POSTGRES_USER: easystream
+      POSTGRES_PASSWORD: easystream123
+      POSTGRES_DB: easystream
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - easystream-net
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: easystream-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - easystream-net
+
+  # ZLMediaKit 流媒体服务器
+  zlmediakit:
+    image: zlmediakit/zlmediakit:master
+    container_name: easystream-zlmediakit
+    ports:
+      # HTTP API 和 HTTP-FLV/HLS 播放
+      - "80:80"
+      - "443:443"
+      # RTMP 推流/拉流
+      - "1935:1935"
+      # RTSP 推流/拉流
+      - "554:554"
+      # RTP 收流
+      - "10000:10000"
+      - "10000:10000/udp"
+      # SRT 推流/拉流
+      - "9000:9000/udp"
+    environment:
+      # API 密钥，需与 config.yaml 中的 zlmediakit.secret 一致
+      - SECRET=035c73f7-bb6b-4889-a715-d9eb2d1925cc
+    volumes:
+      - zlm_data:/opt/media/bin/www
+      - zlm_record:/opt/media/bin/record
+    restart: unless-stopped
+    networks:
+      - easystream-net
+
+volumes:
+  postgres_data:
+    name: easystream-postgres
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ./data/postgres
+  redis_data:
+    name: easystream-redis
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ./data/redis
+  zlm_data:
+    name: easystream-zlm-data
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ./data/zlm/www
+  zlm_record:
+    name: easystream-zlm-record
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ./data/zlm/record
+
+networks:
+  easystream-net:
+    driver: bridge

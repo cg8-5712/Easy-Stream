@@ -9,6 +9,7 @@ import (
 	"easy-stream/internal/middleware"
 	"easy-stream/internal/repository"
 	"easy-stream/internal/service"
+	"easy-stream/internal/storage"
 	"easy-stream/pkg/logger"
 
 	"github.com/gin-gonic/gin"
@@ -46,10 +47,19 @@ func main() {
 	streamSvc := service.NewStreamService(streamRepo, rdb, cfg.ZLMediaKit)
 	authSvc := service.NewAuthService(userRepo, rdb, cfg.JWT)
 
+	// 初始化存储管理器
+	var storageManager *storage.Manager
+	if len(cfg.Storage.Targets) > 0 {
+		storageManager, err = storage.NewManager(cfg.Storage)
+		if err != nil {
+			log.Printf("Warning: Failed to init storage manager: %v", err)
+		}
+	}
+
 	// 初始化 Handler
 	streamHandler := handler.NewStreamHandler(streamSvc)
 	authHandler := handler.NewAuthHandler(authSvc)
-	hookHandler := handler.NewHookHandler(streamSvc)
+	hookHandler := handler.NewHookHandler(streamSvc, storageManager)
 	systemHandler := handler.NewSystemHandler()
 
 	// 启动定时任务：检查超时直播
@@ -122,6 +132,7 @@ func main() {
 			hooks.POST("/on_stream_none_reader", hookHandler.OnStreamNoneReader)
 			hooks.POST("/on_play", hookHandler.OnPlay)
 			hooks.POST("/on_player_disconnect", hookHandler.OnPlayerDisconnect)
+			hooks.POST("/on_record_mp4", hookHandler.OnRecordMP4)
 		}
 	}
 

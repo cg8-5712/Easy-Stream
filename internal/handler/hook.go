@@ -5,16 +5,21 @@ import (
 
 	"easy-stream/internal/model"
 	"easy-stream/internal/service"
+	"easy-stream/internal/storage"
 
 	"github.com/gin-gonic/gin"
 )
 
 type HookHandler struct {
-	streamSvc *service.StreamService
+	streamSvc      *service.StreamService
+	storageManager *storage.Manager
 }
 
-func NewHookHandler(streamSvc *service.StreamService) *HookHandler {
-	return &HookHandler{streamSvc: streamSvc}
+func NewHookHandler(streamSvc *service.StreamService, storageManager *storage.Manager) *HookHandler {
+	return &HookHandler{
+		streamSvc:      streamSvc,
+		storageManager: storageManager,
+	}
 }
 
 // OnPublish 推流开始回调
@@ -101,5 +106,30 @@ func (h *HookHandler) OnPlayerDisconnect(c *gin.Context) {
 	}
 
 	h.streamSvc.OnPlayerDisconnect(&req)
+	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
+}
+
+// OnRecordMP4 录制完成回调
+func (h *HookHandler) OnRecordMP4(c *gin.Context) {
+	var req model.OnRecordMP4Request
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: err.Error()})
+		return
+	}
+
+	// 记录录制文件到数据库
+	if err := h.streamSvc.AddRecordFile(req.Stream, req.FilePath); err != nil {
+		c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: err.Error()})
+		return
+	}
+
+	// 上传到所有启用的存储
+	if h.storageManager != nil && h.storageManager.HasStorages() {
+		go func() {
+			remotePath := req.FileName
+			h.storageManager.UploadToAll(c.Request.Context(), req.FilePath, remotePath)
+		}()
+	}
+
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
 }
