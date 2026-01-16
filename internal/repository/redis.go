@@ -77,3 +77,30 @@ func (r *RedisClient) VerifyStreamAccessToken(streamKey, token string) (bool, er
 	return val == "1", nil
 }
 
+// DeleteStreamAccessTokens 删除指定直播的所有访问令牌（直播结束时调用）
+func (r *RedisClient) DeleteStreamAccessTokens(streamKey string) error {
+	ctx := context.Background()
+	pattern := fmt.Sprintf("stream_access:%s:*", streamKey)
+
+	var cursor uint64
+	for {
+		keys, nextCursor, err := r.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return err
+		}
+
+		if len(keys) > 0 {
+			if err := r.Del(ctx, keys...).Err(); err != nil {
+				return err
+			}
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return nil
+}
+

@@ -11,8 +11,6 @@ import (
 	"easy-stream/internal/repository"
 	"easy-stream/internal/zlm"
 	"easy-stream/pkg/utils"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type StreamService struct {
@@ -36,25 +34,10 @@ func (s *StreamService) Create(req *model.CreateStreamRequest, userID int64) (*m
 		return nil, fmt.Errorf("scheduled end time must be after start time")
 	}
 
-	// 如果是私有直播，必须设置密码
-	if req.Visibility == model.StreamVisibilityPrivate && req.Password == "" {
-		return nil, ErrPrivateStream
-	}
-
 	// 设置默认超时时间（30分钟）
 	autoKickDelay := req.AutoKickDelay
 	if autoKickDelay == 0 {
 		autoKickDelay = 30
-	}
-
-	// 加密密码
-	var passwordHash string
-	if req.Password != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, err
-		}
-		passwordHash = string(hash)
 	}
 
 	stream := &model.Stream{
@@ -64,7 +47,6 @@ func (s *StreamService) Create(req *model.CreateStreamRequest, userID int64) (*m
 		DeviceID:           strPtr(req.DeviceID),
 		Status:             model.StreamStatusIdle,
 		Visibility:         req.Visibility,
-		Password:           strPtr(passwordHash),
 		RecordEnabled:      req.RecordEnabled,
 		RecordFiles:        model.StringArray{},
 		StreamerName:       strPtr(req.StreamerName),
@@ -73,6 +55,17 @@ func (s *StreamService) Create(req *model.CreateStreamRequest, userID int64) (*m
 		ScheduledEndTime:   req.ScheduledEndTime,
 		AutoKickDelay:      autoKickDelay,
 		CreatedBy:          userID,
+	}
+
+	// 如果是私有直播，自动生成分享码
+	if req.Visibility == model.StreamVisibilityPrivate {
+		shareCode := s.generateShareCode()
+		stream.ShareCode = &shareCode
+
+		// 设置分享码最大使用次数
+		if req.ShareCodeMaxUses != nil {
+			stream.ShareCodeMaxUses = *req.ShareCodeMaxUses
+		}
 	}
 
 	if err := s.streamRepo.Create(stream); err != nil {
@@ -173,14 +166,20 @@ func (s *StreamService) Update(key string, req *model.UpdateStreamRequest) (*mod
 		stream.DeviceID = strPtr(req.DeviceID)
 	}
 	if req.Visibility != "" {
-		stream.Visibility = req.Visibility
-	}
-	if req.Password != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, err
+		// 如果从公开改为私有，自动生成分享码
+		if req.Visibility == model.StreamVisibilityPrivate && stream.Visibility == model.StreamVisibilityPublic {
+			shareCode := s.generateShareCode()
+			stream.ShareCode = &shareCode
+			stream.ShareCodeMaxUses = 0
+			stream.ShareCodeUsedCount = 0
 		}
-		stream.Password = strPtr(string(hash))
+		// 如果从私有改为公开，清除分享码
+		if req.Visibility == model.StreamVisibilityPublic && stream.Visibility == model.StreamVisibilityPrivate {
+			stream.ShareCode = nil
+			stream.ShareCodeMaxUses = 0
+			stream.ShareCodeUsedCount = 0
+		}
+		stream.Visibility = req.Visibility
 	}
 	if req.StreamerName != "" {
 		stream.StreamerName = strPtr(req.StreamerName)
@@ -254,22 +253,29 @@ func (s *StreamService) Kick(key string) error {
 	return s.streamRepo.UpdateStatus(key, model.StreamStatusIdle)
 }
 
-// VerifyPassword 验证私有直播密码（游客）
-func (s *StreamService) VerifyPassword(key, password string) (*model.StreamAccessToken, error) {
-	stream, err := s.streamRepo.GetByKey(key)
+// VerifyShareCode 验证分享码（游客）
+func (s *StreamService) VerifyShareCode(shareCode string) (*model.StreamAccessToken, error) {
+	stream, err := s.streamRepo.GetByShareCode(shareCode)
 	if err != nil {
 		return nil, err
 	}
 	if stream == nil {
-		return nil, ErrStreamNotFound
+		return nil, ErrInvalidShareCode
 	}
 
-	// 验证密码
-	if stream.Password == nil || *stream.Password == "" {
-		return nil, ErrInvalidPassword
+	// 检查直播是否已结束
+	if stream.Status == model.StreamStatusEnded {
+		return nil, ErrStreamEnded
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(*stream.Password), []byte(password)); err != nil {
-		return nil, ErrInvalidPassword
+
+	// 检查使用次数限制
+	if stream.ShareCodeMaxUses > 0 && stream.ShareCodeUsedCount >= stream.ShareCodeMaxUses {
+		return nil, ErrShareCodeMaxUsesReached
+	}
+
+	// 增加使用次数
+	if err := s.streamRepo.IncrementShareCodeUsedCount(stream.StreamKey); err != nil {
+		return nil, err
 	}
 
 	// 生成访问令牌（有效期2小时）
@@ -279,15 +285,100 @@ func (s *StreamService) VerifyPassword(key, password string) (*model.StreamAcces
 	}
 
 	expiresAt := time.Now().Add(2 * time.Hour)
-	if err := s.redisRepo.SetStreamAccessToken(key, token, 2*time.Hour); err != nil {
+	if err := s.redisRepo.SetStreamAccessToken(stream.StreamKey, token, 2*time.Hour); err != nil {
 		return nil, err
 	}
 
 	return &model.StreamAccessToken{
-		StreamKey: key,
+		StreamKey: stream.StreamKey,
 		Token:     token,
 		ExpiresAt: expiresAt,
 	}, nil
+}
+
+// AddShareCode 为直播添加分享码（管理员）
+func (s *StreamService) AddShareCode(streamKey string, maxUses int) (*model.Stream, error) {
+	stream, err := s.streamRepo.GetByKey(streamKey)
+	if err != nil {
+		return nil, err
+	}
+	if stream == nil {
+		return nil, ErrStreamNotFound
+	}
+
+	// 只有私有直播才能添加分享码
+	if stream.Visibility != model.StreamVisibilityPrivate {
+		return nil, ErrNotPrivateStream
+	}
+
+	shareCode := s.generateShareCode()
+	if err := s.streamRepo.UpdateShareCode(streamKey, shareCode, maxUses); err != nil {
+		return nil, err
+	}
+
+	return s.streamRepo.GetByKey(streamKey)
+}
+
+// RegenerateShareCode 重新生成分享码（管理员）
+func (s *StreamService) RegenerateShareCode(streamKey string, req *model.RegenerateShareCodeRequest) (*model.Stream, error) {
+	stream, err := s.streamRepo.GetByKey(streamKey)
+	if err != nil {
+		return nil, err
+	}
+	if stream == nil {
+		return nil, ErrStreamNotFound
+	}
+
+	// 只有私有直播才能生成分享码
+	if stream.Visibility != model.StreamVisibilityPrivate {
+		return nil, ErrNotPrivateStream
+	}
+
+	shareCode := s.generateShareCode()
+	maxUses := 0
+	if req.MaxUses != nil {
+		maxUses = *req.MaxUses
+	}
+
+	if err := s.streamRepo.UpdateShareCode(streamKey, shareCode, maxUses); err != nil {
+		return nil, err
+	}
+
+	return s.streamRepo.GetByKey(streamKey)
+}
+
+// UpdateShareCodeMaxUses 更新分享码最大使用次数（管理员）
+func (s *StreamService) UpdateShareCodeMaxUses(streamKey string, maxUses int) (*model.Stream, error) {
+	stream, err := s.streamRepo.GetByKey(streamKey)
+	if err != nil {
+		return nil, err
+	}
+	if stream == nil {
+		return nil, ErrStreamNotFound
+	}
+
+	if stream.ShareCode == nil {
+		return nil, ErrNoShareCode
+	}
+
+	if err := s.streamRepo.UpdateShareCodeMaxUses(streamKey, maxUses); err != nil {
+		return nil, err
+	}
+
+	return s.streamRepo.GetByKey(streamKey)
+}
+
+// DeleteShareCode 删除分享码（管理员）
+func (s *StreamService) DeleteShareCode(streamKey string) error {
+	stream, err := s.streamRepo.GetByKey(streamKey)
+	if err != nil {
+		return err
+	}
+	if stream == nil {
+		return ErrStreamNotFound
+	}
+
+	return s.streamRepo.DeleteShareCode(streamKey)
 }
 
 // OnPublish 处理推流开始回调
@@ -344,6 +435,11 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 				fmt.Printf("failed to stop record for stream %s: %v\n", req.Stream, err)
 			}
 		}()
+	}
+
+	// 清理 Redis 中的访问令牌（分享码和分享链接生成的令牌）
+	if err := s.redisRepo.DeleteStreamAccessTokens(req.Stream); err != nil {
+		fmt.Printf("failed to delete access tokens for stream %s: %v\n", req.Stream, err)
 	}
 
 	// 重置当前观看人数
@@ -408,6 +504,17 @@ func (s *StreamService) CheckExpiredStreams() error {
 // AddRecordFile 添加录制文件路径
 func (s *StreamService) AddRecordFile(streamKey, filePath string) error {
 	return s.streamRepo.AppendRecordFile(streamKey, filePath)
+}
+
+// generateShareCode 生成6位分享码
+func (s *StreamService) generateShareCode() string {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // 排除易混淆字符 I,O,0,1
+	b := make([]byte, 6)
+	rand.Read(b)
+	for i := range b {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b)
 }
 
 // generateAccessToken 生成访问令牌

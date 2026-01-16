@@ -42,7 +42,9 @@ CREATE TABLE IF NOT EXISTS streams (
     device_id               VARCHAR(64),
     status                  VARCHAR(16) DEFAULT 'idle',
     visibility              VARCHAR(16) DEFAULT 'public',
-    password                VARCHAR(256),
+    share_code              VARCHAR(8),
+    share_code_max_uses     INTEGER DEFAULT 0,
+    share_code_used_count   INTEGER DEFAULT 0,
     record_enabled          BOOLEAN DEFAULT FALSE,
     record_files            JSONB DEFAULT '[]',
     protocol                VARCHAR(16),
@@ -71,6 +73,21 @@ CREATE INDEX IF NOT EXISTS idx_streams_created_by ON streams(created_by);
 CREATE INDEX IF NOT EXISTS idx_streams_scheduled_start ON streams(scheduled_start_time);
 CREATE INDEX IF NOT EXISTS idx_streams_scheduled_end ON streams(scheduled_end_time);
 CREATE INDEX IF NOT EXISTS idx_streams_record_enabled ON streams(record_enabled);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_streams_share_code ON streams(share_code) WHERE share_code IS NOT NULL;
+
+-- 创建分享链接表
+CREATE TABLE IF NOT EXISTS share_links (
+    id              SERIAL PRIMARY KEY,
+    stream_id       INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+    token           VARCHAR(64) UNIQUE NOT NULL,
+    max_uses        INTEGER DEFAULT 0,
+    used_count      INTEGER DEFAULT 0,
+    created_by      INTEGER REFERENCES users(id),
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_links_stream_id ON share_links(stream_id);
+CREATE INDEX IF NOT EXISTS idx_share_links_token ON share_links(token);
 
 -- 创建操作日志表
 CREATE TABLE IF NOT EXISTS operation_logs (
@@ -117,7 +134,9 @@ COMMENT ON COLUMN streams.description IS '推流描述';
 COMMENT ON COLUMN streams.device_id IS '设备ID';
 COMMENT ON COLUMN streams.status IS '状态：idle/pushing/ended';
 COMMENT ON COLUMN streams.visibility IS '可见性：public/private';
-COMMENT ON COLUMN streams.password IS '私有直播密码（加密）';
+COMMENT ON COLUMN streams.share_code IS '分享码（私有直播自动生成）';
+COMMENT ON COLUMN streams.share_code_max_uses IS '分享码最大使用次数（0表示无限制）';
+COMMENT ON COLUMN streams.share_code_used_count IS '分享码已使用次数';
 COMMENT ON COLUMN streams.record_enabled IS '是否开启录制';
 COMMENT ON COLUMN streams.record_files IS '录制文件路径列表（JSON数组）';
 COMMENT ON COLUMN streams.protocol IS '推流协议：rtmp/rtsp/srt';
@@ -135,6 +154,14 @@ COMMENT ON COLUMN streams.current_viewers IS '当前观看人数';
 COMMENT ON COLUMN streams.total_viewers IS '累计观看人次';
 COMMENT ON COLUMN streams.peak_viewers IS '峰值观看人数';
 COMMENT ON COLUMN streams.created_by IS '创建者用户ID';
+
+COMMENT ON TABLE share_links IS '分享链接表';
+COMMENT ON COLUMN share_links.id IS '链接ID';
+COMMENT ON COLUMN share_links.stream_id IS '关联的直播ID';
+COMMENT ON COLUMN share_links.token IS '分享链接token';
+COMMENT ON COLUMN share_links.max_uses IS '最大使用次数（0表示无限制）';
+COMMENT ON COLUMN share_links.used_count IS '已使用次数';
+COMMENT ON COLUMN share_links.created_by IS '创建者用户ID';
 
 COMMENT ON TABLE operation_logs IS '操作日志表';
 COMMENT ON COLUMN operation_logs.id IS '日志ID';

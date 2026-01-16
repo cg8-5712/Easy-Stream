@@ -40,9 +40,12 @@ type Stream struct {
 	DeviceID           *string     `json:"device_id" db:"device_id"`
 	Status             string      `json:"status" db:"status"`                 // idle / pushing / ended
 	Visibility         string      `json:"visibility" db:"visibility"`         // public / private
-	Password           *string     `json:"-" db:"password"`                    // 私有直播密码
-	RecordEnabled      bool        `json:"record_enabled" db:"record_enabled"` // 是否开启录制
-	RecordFiles        StringArray `json:"record_files" db:"record_files"`     // 录制文件路径列表
+	// 分享码相关字段
+	ShareCode          *string     `json:"share_code,omitempty" db:"share_code"`             // 分享码（私有直播自动生成）
+	ShareCodeMaxUses   int         `json:"share_code_max_uses" db:"share_code_max_uses"`     // 分享码最大使用次数（0表示无限制）
+	ShareCodeUsedCount int         `json:"share_code_used_count" db:"share_code_used_count"` // 分享码已使用次数
+	RecordEnabled      bool        `json:"record_enabled" db:"record_enabled"`               // 是否开启录制
+	RecordFiles        StringArray `json:"record_files" db:"record_files"`                   // 录制文件路径列表
 	Protocol           *string     `json:"protocol" db:"protocol"`
 	Bitrate            *int        `json:"bitrate" db:"bitrate"`
 	FPS                *int        `json:"fps" db:"fps"`
@@ -82,8 +85,8 @@ type CreateStreamRequest struct {
 	Description        string     `json:"description"`
 	DeviceID           string     `json:"device_id"`
 	Visibility         string     `json:"visibility" binding:"required,oneof=public private"`
-	Password           string     `json:"password"`      // 私有直播时必填
-	RecordEnabled      bool       `json:"record_enabled"` // 是否开启录制
+	ShareCodeMaxUses   *int       `json:"share_code_max_uses"` // 分享码最大使用次数（仅私有直播有效，0或不传表示无限制）
+	RecordEnabled      bool       `json:"record_enabled"`      // 是否开启录制
 	StreamerName       string     `json:"streamer_name" binding:"required"`
 	StreamerContact    string     `json:"streamer_contact"`
 	ScheduledStartTime *time.Time `json:"scheduled_start_time" binding:"required"`
@@ -97,7 +100,6 @@ type UpdateStreamRequest struct {
 	Description        string     `json:"description"`
 	DeviceID           string     `json:"device_id"`
 	Visibility         string     `json:"visibility" binding:"omitempty,oneof=public private"`
-	Password           string     `json:"password"`
 	RecordEnabled      *bool      `json:"record_enabled"` // 使用指针以区分未传和传 false
 	StreamerName       string     `json:"streamer_name"`
 	StreamerContact    string     `json:"streamer_contact"`
@@ -128,14 +130,9 @@ const (
 	TimeRangeFuture  = "future"  // 未开始的直播
 )
 
-// VerifyStreamPasswordRequest 验证私有直播密码请求
-type VerifyStreamPasswordRequest struct {
-	Password string `json:"password" binding:"required"`
-}
-
 // StreamAccessToken 直播访问令牌（用于私有直播）
 type StreamAccessToken struct {
 	StreamKey string    `json:"stream_key"`
-	Token     string    `json:"token"`
+	Token     string    `json:"access_token"`
 	ExpiresAt time.Time `json:"expires_at"`
 }

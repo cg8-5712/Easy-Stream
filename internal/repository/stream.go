@@ -21,19 +21,21 @@ func NewStreamRepository(db *sql.DB) *StreamRepository {
 func (r *StreamRepository) Create(stream *model.Stream) error {
 	query := `
 		INSERT INTO streams (
-			stream_key, name, description, device_id, status, visibility, password,
+			stream_key, name, description, device_id, status, visibility,
+			share_code, share_code_max_uses, share_code_used_count,
 			record_enabled, record_files,
 			streamer_name, streamer_contact, scheduled_start_time, scheduled_end_time,
 			auto_kick_delay, created_by, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		RETURNING id
 	`
 	now := time.Now()
 	recordFiles, _ := stream.RecordFiles.Value()
 	return r.db.QueryRow(query,
 		stream.StreamKey, stream.Name, stream.Description, stream.DeviceID,
-		stream.Status, stream.Visibility, stream.Password,
+		stream.Status, stream.Visibility,
+		stream.ShareCode, stream.ShareCodeMaxUses, stream.ShareCodeUsedCount,
 		stream.RecordEnabled, recordFiles,
 		stream.StreamerName, stream.StreamerContact,
 		stream.ScheduledStartTime, stream.ScheduledEndTime,
@@ -44,7 +46,8 @@ func (r *StreamRepository) Create(stream *model.Stream) error {
 // GetByKey 根据 stream_key 获取
 func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 	query := `
-		SELECT id, stream_key, name, description, device_id, status, visibility, password,
+		SELECT id, stream_key, name, description, device_id, status, visibility,
+			   share_code, share_code_max_uses, share_code_used_count,
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
@@ -57,7 +60,8 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 	stream := &model.Stream{}
 	err := r.db.QueryRow(query, key).Scan(
 		&stream.ID, &stream.StreamKey, &stream.Name, &stream.Description,
-		&stream.DeviceID, &stream.Status, &stream.Visibility, &stream.Password,
+		&stream.DeviceID, &stream.Status, &stream.Visibility,
+		&stream.ShareCode, &stream.ShareCodeMaxUses, &stream.ShareCodeUsedCount,
 		&stream.RecordEnabled, &stream.RecordFiles,
 		&stream.Protocol, &stream.Bitrate, &stream.FPS,
 		&stream.StreamerName, &stream.StreamerContact,
@@ -75,7 +79,8 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 // GetByID 根据 ID 获取
 func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 	query := `
-		SELECT id, stream_key, name, description, device_id, status, visibility, password,
+		SELECT id, stream_key, name, description, device_id, status, visibility,
+			   share_code, share_code_max_uses, share_code_used_count,
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
@@ -88,7 +93,8 @@ func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 	stream := &model.Stream{}
 	err := r.db.QueryRow(query, id).Scan(
 		&stream.ID, &stream.StreamKey, &stream.Name, &stream.Description,
-		&stream.DeviceID, &stream.Status, &stream.Visibility, &stream.Password,
+		&stream.DeviceID, &stream.Status, &stream.Visibility,
+		&stream.ShareCode, &stream.ShareCodeMaxUses, &stream.ShareCodeUsedCount,
 		&stream.RecordEnabled, &stream.RecordFiles,
 		&stream.Protocol, &stream.Bitrate, &stream.FPS,
 		&stream.StreamerName, &stream.StreamerContact,
@@ -158,6 +164,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 	// 查询列表
 	query := `
 		SELECT id, stream_key, name, description, device_id, status, visibility,
+			   share_code, share_code_max_uses, share_code_used_count,
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
@@ -180,6 +187,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 		err := rows.Scan(
 			&s.ID, &s.StreamKey, &s.Name, &s.Description,
 			&s.DeviceID, &s.Status, &s.Visibility,
+			&s.ShareCode, &s.ShareCodeMaxUses, &s.ShareCodeUsedCount,
 			&s.RecordEnabled, &s.RecordFiles,
 			&s.Protocol, &s.Bitrate, &s.FPS,
 			&s.StreamerName, &s.StreamerContact,
@@ -200,20 +208,22 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 func (r *StreamRepository) Update(stream *model.Stream) error {
 	query := `
 		UPDATE streams SET
-			name=$1, description=$2, device_id=$3, status=$4, visibility=$5, password=$6,
-			record_enabled=$7, record_files=$8,
-			protocol=$9, bitrate=$10, fps=$11,
-			streamer_name=$12, streamer_contact=$13,
-			scheduled_start_time=$14, scheduled_end_time=$15, auto_kick_delay=$16,
-			actual_start_time=$17, actual_end_time=$18, last_frame_at=$19,
-			current_viewers=$20, total_viewers=$21, peak_viewers=$22,
-			updated_at=$23
-		WHERE stream_key=$24
+			name=$1, description=$2, device_id=$3, status=$4, visibility=$5,
+			share_code=$6, share_code_max_uses=$7, share_code_used_count=$8,
+			record_enabled=$9, record_files=$10,
+			protocol=$11, bitrate=$12, fps=$13,
+			streamer_name=$14, streamer_contact=$15,
+			scheduled_start_time=$16, scheduled_end_time=$17, auto_kick_delay=$18,
+			actual_start_time=$19, actual_end_time=$20, last_frame_at=$21,
+			current_viewers=$22, total_viewers=$23, peak_viewers=$24,
+			updated_at=$25
+		WHERE stream_key=$26
 	`
 	recordFiles, _ := stream.RecordFiles.Value()
 	_, err := r.db.Exec(query,
 		stream.Name, stream.Description, stream.DeviceID, stream.Status,
-		stream.Visibility, stream.Password,
+		stream.Visibility,
+		stream.ShareCode, stream.ShareCodeMaxUses, stream.ShareCodeUsedCount,
 		stream.RecordEnabled, recordFiles,
 		stream.Protocol, stream.Bitrate, stream.FPS,
 		stream.StreamerName, stream.StreamerContact,
@@ -254,7 +264,8 @@ func (r *StreamRepository) UpdateRecordEnabled(key string, enabled bool) error {
 // GetPushingStreams 获取所有正在推流的直播
 func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 	query := `
-		SELECT id, stream_key, name, description, device_id, status, visibility, password,
+		SELECT id, stream_key, name, description, device_id, status, visibility,
+			   share_code, share_code_max_uses, share_code_used_count,
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
@@ -274,7 +285,8 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 		s := &model.Stream{}
 		err := rows.Scan(
 			&s.ID, &s.StreamKey, &s.Name, &s.Description,
-			&s.DeviceID, &s.Status, &s.Visibility, &s.Password,
+			&s.DeviceID, &s.Status, &s.Visibility,
+			&s.ShareCode, &s.ShareCodeMaxUses, &s.ShareCodeUsedCount,
 			&s.RecordEnabled, &s.RecordFiles,
 			&s.Protocol, &s.Bitrate, &s.FPS,
 			&s.StreamerName, &s.StreamerContact,
@@ -327,5 +339,73 @@ func (r *StreamRepository) ResetCurrentViewers(key string) error {
 // Delete 删除推流
 func (r *StreamRepository) Delete(key string) error {
 	_, err := r.db.Exec("DELETE FROM streams WHERE stream_key = $1", key)
+	return err
+}
+
+// GetByShareCode 根据分享码获取直播
+func (r *StreamRepository) GetByShareCode(shareCode string) (*model.Stream, error) {
+	query := `
+		SELECT id, stream_key, name, description, device_id, status, visibility,
+			   share_code, share_code_max_uses, share_code_used_count,
+			   record_enabled, record_files,
+			   protocol, bitrate, fps, streamer_name, streamer_contact,
+			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
+			   actual_start_time, actual_end_time, last_frame_at,
+			   current_viewers, total_viewers, peak_viewers,
+			   created_by, created_at, updated_at
+		FROM streams WHERE share_code = $1
+	`
+
+	stream := &model.Stream{}
+	err := r.db.QueryRow(query, shareCode).Scan(
+		&stream.ID, &stream.StreamKey, &stream.Name, &stream.Description,
+		&stream.DeviceID, &stream.Status, &stream.Visibility,
+		&stream.ShareCode, &stream.ShareCodeMaxUses, &stream.ShareCodeUsedCount,
+		&stream.RecordEnabled, &stream.RecordFiles,
+		&stream.Protocol, &stream.Bitrate, &stream.FPS,
+		&stream.StreamerName, &stream.StreamerContact,
+		&stream.ScheduledStartTime, &stream.ScheduledEndTime, &stream.AutoKickDelay,
+		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastFrameAt,
+		&stream.CurrentViewers, &stream.TotalViewers, &stream.PeakViewers,
+		&stream.CreatedBy, &stream.CreatedAt, &stream.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return stream, err
+}
+
+// IncrementShareCodeUsedCount 增加分享码使用次数
+func (r *StreamRepository) IncrementShareCodeUsedCount(streamKey string) error {
+	query := `UPDATE streams SET share_code_used_count = share_code_used_count + 1, updated_at = $1 WHERE stream_key = $2`
+	_, err := r.db.Exec(query, time.Now(), streamKey)
+	return err
+}
+
+// UpdateShareCode 更新分享码（重新生成或添加分享码）
+func (r *StreamRepository) UpdateShareCode(streamKey, shareCode string, maxUses int) error {
+	query := `
+		UPDATE streams SET
+			share_code = $1,
+			share_code_max_uses = $2,
+			share_code_used_count = 0,
+			updated_at = $3
+		WHERE stream_key = $4
+	`
+	_, err := r.db.Exec(query, shareCode, maxUses, time.Now(), streamKey)
+	return err
+}
+
+// UpdateShareCodeMaxUses 更新分享码最大使用次数（管理员调整）
+func (r *StreamRepository) UpdateShareCodeMaxUses(streamKey string, maxUses int) error {
+	query := `UPDATE streams SET share_code_max_uses = $1, updated_at = $2 WHERE stream_key = $3`
+	_, err := r.db.Exec(query, maxUses, time.Now(), streamKey)
+	return err
+}
+
+// DeleteShareCode 删除分享码
+func (r *StreamRepository) DeleteShareCode(streamKey string) error {
+	query := `UPDATE streams SET share_code = NULL, share_code_max_uses = 0, share_code_used_count = 0, updated_at = $1 WHERE stream_key = $2`
+	_, err := r.db.Exec(query, time.Now(), streamKey)
 	return err
 }

@@ -9,7 +9,8 @@
       "Bash(then echo \"SSH密钥已存在\")",
       "Bash(fi)",
       "Bash(go build:*)",
-      "Bash(PGPASSWORD=postgres psql:*)"
+      "Bash(PGPASSWORD=postgres psql:*)",
+      "Bash(go test:*)"
     ]
   }
 }

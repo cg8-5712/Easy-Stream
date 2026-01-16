@@ -56,10 +56,6 @@ func (h *StreamHandler) Create(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	stream, err := h.streamSvc.Create(&req, userID)
 	if err != nil {
-		if err == service.ErrPrivateStream {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "private stream requires password"})
-			return
-		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -81,7 +77,7 @@ func (h *StreamHandler) Get(c *gin.Context) {
 			return
 		}
 		if err == service.ErrPrivateStream {
-			c.JSON(http.StatusForbidden, gin.H{"error": "private stream requires password"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "private stream requires authentication"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -111,29 +107,122 @@ func (h *StreamHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, stream)
 }
 
-// VerifyPassword 验证私有直播密码（游客）
-func (h *StreamHandler) VerifyPassword(c *gin.Context) {
-	key := c.Param("key")
-	var req model.VerifyStreamPasswordRequest
+// VerifyShareCode 验证分享码（游客）
+func (h *StreamHandler) VerifyShareCode(c *gin.Context) {
+	var req model.VerifyShareCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	token, err := h.streamSvc.VerifyPassword(key, req.Password)
+	token, err := h.streamSvc.VerifyShareCode(req.ShareCode)
 	if err != nil {
+		switch err {
+		case service.ErrInvalidShareCode:
+			c.JSON(http.StatusNotFound, gin.H{"error": "invalid share code"})
+		case service.ErrStreamEnded:
+			c.JSON(http.StatusGone, gin.H{"error": "stream has ended"})
+		case service.ErrShareCodeMaxUsesReached:
+			c.JSON(http.StatusForbidden, gin.H{"error": "share code max uses reached"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, token)
+}
+
+// AddShareCode 为直播添加分享码（管理员）
+func (h *StreamHandler) AddShareCode(c *gin.Context) {
+	key := c.Param("key")
+	var req model.RegenerateShareCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	maxUses := 0
+	if req.MaxUses != nil {
+		maxUses = *req.MaxUses
+	}
+
+	stream, err := h.streamSvc.AddShareCode(key, maxUses)
+	if err != nil {
+		switch err {
+		case service.ErrStreamNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		case service.ErrNotPrivateStream:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "only private streams support sharing"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, stream)
+}
+
+// RegenerateShareCode 重新生成分享码（管理员）
+func (h *StreamHandler) RegenerateShareCode(c *gin.Context) {
+	key := c.Param("key")
+	var req model.RegenerateShareCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	stream, err := h.streamSvc.RegenerateShareCode(key, &req)
+	if err != nil {
+		switch err {
+		case service.ErrStreamNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		case service.ErrNotPrivateStream:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "only private streams support sharing"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, stream)
+}
+
+// UpdateShareCodeMaxUses 更新分享码最大使用次数（管理员）
+func (h *StreamHandler) UpdateShareCodeMaxUses(c *gin.Context) {
+	key := c.Param("key")
+	var req struct {
+		MaxUses int `json:"max_uses"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	stream, err := h.streamSvc.UpdateShareCodeMaxUses(key, req.MaxUses)
+	if err != nil {
+		switch err {
+		case service.ErrStreamNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		case service.ErrNoShareCode:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "stream has no share code"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, stream)
+}
+
+// DeleteShareCode 删除分享码（管理员）
+func (h *StreamHandler) DeleteShareCode(c *gin.Context) {
+	key := c.Param("key")
+	if err := h.streamSvc.DeleteShareCode(key); err != nil {
 		if err == service.ErrStreamNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
-			return
-		}
-		if err == service.ErrInvalidPassword {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid password"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, token)
+	c.JSON(http.StatusOK, gin.H{"message": "share code deleted"})
 }
 
 // Update 更新推流信息（管理员）
