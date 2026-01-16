@@ -8,6 +8,48 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// OptionalAuth 可选 JWT 认证中间件（不强制要求登录，但会尝试解析 token）
+func OptionalAuth(secret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.Next()
+			return
+		}
+
+		tokenString := parts[1]
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return []byte(secret), nil
+		})
+
+		if err != nil || !token.Valid {
+			c.Next()
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.Next()
+			return
+		}
+
+		// 将用户信息存入上下文
+		c.Set("user_id", int64(claims["user_id"].(float64)))
+		c.Set("username", claims["username"].(string))
+
+		c.Next()
+	}
+}
+
 // Auth JWT 认证中间件
 func Auth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {

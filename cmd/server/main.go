@@ -106,8 +106,8 @@ func main() {
 		// 推流管理接口
 		streams := api.Group("/streams")
 		{
-			// 游客可访问（公开直播列表）
-			streams.GET("", streamHandler.List)
+			// 游客可访问（公开直播列表），管理员可获取所有内容
+			streams.GET("", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.List)
 			streams.GET("/:key", streamHandler.Get)
 			streams.POST("/:key/verify", streamHandler.VerifyPassword)
 
