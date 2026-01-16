@@ -522,19 +522,19 @@ GET /api/v1/streams/abc123def456?access_token=xyz789...
 
 **接口地址**
 ```
-POST /api/v1/streams/share-code/verify
+POST /api/v1/shares/verify-code
 ```
 
 **请求参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| share_code | string | 是 | 分享码（8位） |
+| share_code | string | 是 | 分享码（6位） |
 
 **请求示例**
 ```json
 {
-  "share_code": "Ab3xK9mN"
+  "share_code": "AB3XK9"
 }
 ```
 
@@ -542,41 +542,174 @@ POST /api/v1/streams/share-code/verify
 ```json
 {
   "stream_key": "abc123def456",
-  "access_token": "xyz789abc123...",
-  "stream": {
-    "id": 1,
-    "stream_key": "abc123def456",
-    "name": "内部会议",
-    "status": "pushing",
-    ...
-  }
+  "token": "xyz789abc123...",
+  "expires_at": "2024-01-01T16:00:00Z"
 }
 ```
 
 **使用方式**
 
-获取 access_token 后，可通过以下方式访问私有直播：
+获取 token 后，可通过以下方式访问私有直播：
 1. 查询参数：`GET /api/v1/streams/:key?access_token={token}`
 2. 分享链接：`https://example.com/live/{stream_key}?access_token={token}`
 
 **错误响应**
 
-401 Unauthorized:
+404 Not Found:
 ```json
 {
   "error": "invalid share code"
 }
 ```
 
+410 Gone:
+```json
+{
+  "error": "stream has ended"
+}
+```
+
+403 Forbidden:
+```json
+{
+  "error": "share code max uses reached"
+}
+```
+
 ---
 
-### 2.6 重新生成分享码（管理员）
+### 2.6 添加分享码（管理员）
+
+> 管理员为私有直播添加分享码
+
+**接口地址**
+```
+POST /api/v1/streams/:key/share-code
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| max_uses | int | 否 | 最大使用次数（0表示不限制） |
+
+**请求示例**
+```json
+{
+  "max_uses": 10
+}
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "id": 1,
+  "stream_key": "abc123def456",
+  "share_code": "AB3XK9",
+  ...
+}
+```
+
+---
+
+### 2.7 重新生成分享码（管理员）
 
 > 管理员可以重新生成私有直播的分享码，旧分享码将失效
 
 **接口地址**
 ```
-POST /api/v1/streams/:key/share-code/regenerate
+PUT /api/v1/streams/:key/share-code
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| max_uses | int | 否 | 最大使用次数（0表示不限制） |
+
+**响应示例** (200 OK)
+```json
+{
+  "id": 1,
+  "stream_key": "abc123def456",
+  "share_code": "XY7PQ2",
+  ...
+}
+```
+
+---
+
+### 2.8 更新分享码使用次数（管理员）
+
+**接口地址**
+```
+PATCH /api/v1/streams/:key/share-code
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| max_uses | int | 是 | 最大使用次数（0表示不限制） |
+
+**请求示例**
+```json
+{
+  "max_uses": 20
+}
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "id": 1,
+  "stream_key": "abc123def456",
+  "share_code": "AB3XK9",
+  "share_code_max_uses": 20,
+  ...
+}
+```
+
+---
+
+### 2.9 删除分享码（管理员）
+
+**接口地址**
+```
+DELETE /api/v1/streams/:key/share-code
 ```
 
 **请求头**
@@ -593,13 +726,13 @@ Authorization: Bearer {access_token}
 **响应示例** (200 OK)
 ```json
 {
-  "share_code": "Xy7pQ2wR"
+  "message": "share code deleted"
 }
 ```
 
 ---
 
-### 2.7 更新推流信息（管理员）
+### 2.10 更新推流信息（管理员）
 
 **接口地址**
 ```
@@ -666,7 +799,7 @@ Authorization: Bearer {access_token}
 
 ---
 
-### 2.8 删除推流码（管理员）
+### 2.11 删除推流码（管理员）
 
 **接口地址**
 ```
@@ -687,7 +820,7 @@ Authorization: Bearer {access_token}
 
 ---
 
-### 2.9 强制断流（管理员）
+### 2.12 强制断流（管理员）
 
 **接口地址**
 ```
@@ -716,7 +849,7 @@ Authorization: Bearer {access_token}
 
 **接口地址**
 ```
-GET /api/v1/share-links
+GET /api/v1/streams/:key/share-links
 ```
 
 **请求头**
@@ -724,11 +857,11 @@ GET /api/v1/share-links
 Authorization: Bearer {access_token}
 ```
 
-**查询参数**
+**路径参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| stream_id | int | 否 | 按直播 ID 过滤 |
+| key | string | 是 | 推流密钥 |
 
 **响应示例** (200 OK)
 ```json
@@ -741,12 +874,7 @@ Authorization: Bearer {access_token}
       "max_uses": 100,
       "used_count": 25,
       "created_by": 1,
-      "created_at": "2024-01-01T10:00:00Z",
-      "stream": {
-        "id": 5,
-        "stream_key": "test-stream-004",
-        "name": "内部会议"
-      }
+      "created_at": "2024-01-01T10:00:00Z"
     }
   ]
 }
@@ -758,7 +886,7 @@ Authorization: Bearer {access_token}
 
 **接口地址**
 ```
-POST /api/v1/share-links
+POST /api/v1/streams/:key/share-links
 ```
 
 **请求头**
@@ -766,17 +894,21 @@ POST /api/v1/share-links
 Authorization: Bearer {access_token}
 ```
 
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+
 **请求参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| stream_id | int | 是 | 直播 ID |
 | max_uses | int | 否 | 最大使用次数（0表示不限制） |
 
 **请求示例**
 ```json
 {
-  "stream_id": 5,
   "max_uses": 100
 }
 ```
@@ -790,18 +922,63 @@ Authorization: Bearer {access_token}
   "max_uses": 100,
   "used_count": 0,
   "created_by": 1,
-  "created_at": "2024-01-01T10:00:00Z",
-  "share_url": "https://example.com/live/test-stream-004?share_token=abc123xyz789..."
+  "created_at": "2024-01-01T10:00:00Z"
 }
 ```
 
 ---
 
-### 3.3 删除分享链接（管理员）
+### 3.3 更新分享链接使用次数（管理员）
 
 **接口地址**
 ```
-DELETE /api/v1/share-links/:id
+PATCH /api/v1/streams/share-links/:id
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| id | int | 是 | 分享链接 ID |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| max_uses | int | 是 | 最大使用次数（0表示不限制） |
+
+**请求示例**
+```json
+{
+  "max_uses": 200
+}
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "id": 1,
+  "stream_id": 5,
+  "token": "abc123xyz789...",
+  "max_uses": 200,
+  "used_count": 25,
+  "created_by": 1,
+  "created_at": "2024-01-01T10:00:00Z"
+}
+```
+
+---
+
+### 3.4 删除分享链接（管理员）
+
+**接口地址**
+```
+DELETE /api/v1/streams/share-links/:id
 ```
 
 **请求头**
@@ -818,55 +995,56 @@ Authorization: Bearer {access_token}
 **响应示例** (200 OK)
 ```json
 {
-  "message": "deleted"
+  "message": "share link deleted"
 }
 ```
 
 ---
 
-### 3.4 验证分享链接（游客）
+### 3.5 验证分享链接（游客）
 
 > 用户通过分享链接访问时，验证 token 获取访问权限
 
 **接口地址**
 ```
-POST /api/v1/share-links/verify
+GET /api/v1/shares/link/:token
 ```
 
-**请求参数**
+**路径参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | token | string | 是 | 分享链接 token |
 
-**请求示例**
-```json
-{
-  "token": "abc123xyz789..."
-}
-```
-
 **响应示例** (200 OK)
 ```json
 {
   "stream_key": "test-stream-004",
-  "access_token": "xyz789abc123...",
-  "stream": {
-    "id": 5,
-    "stream_key": "test-stream-004",
-    "name": "内部会议",
-    "status": "pushing",
-    ...
-  }
+  "token": "xyz789abc123...",
+  "expires_at": "2024-01-01T18:00:00Z"
 }
 ```
 
 **错误响应**
 
-401 Unauthorized:
+404 Not Found:
 ```json
 {
   "error": "invalid share link"
+}
+```
+
+410 Gone:
+```json
+{
+  "error": "stream has ended"
+}
+```
+
+403 Forbidden:
+```json
+{
+  "error": "share link max uses reached"
 }
 ```
 
@@ -1180,7 +1358,7 @@ POST /api/v1/hooks/on_player_disconnect
 **访问流程**:
 ```
 1. 用户获取分享码（由管理员提供）
-2. 调用 POST /api/v1/streams/share-code/verify 验证分享码
+2. 调用 POST /api/v1/shares/verify-code 验证分享码
 3. 获取 access_token
 4. 使用 access_token 访问直播内容
 ```
@@ -1196,8 +1374,8 @@ POST /api/v1/hooks/on_player_disconnect
 **访问流程**:
 ```
 1. 管理员创建分享链接
-2. 用户点击分享链接（包含 share_token 参数）
-3. 前端调用 POST /api/v1/share-links/verify 验证 token
+2. 用户点击分享链接（包含 token 参数）
+3. 前端调用 GET /api/v1/shares/link/:token 验证 token
 4. 获取 access_token
 5. 使用 access_token 访问直播内容
 ```

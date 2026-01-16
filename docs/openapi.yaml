@@ -15,8 +15,8 @@ tags:
     description: 用户认证相关接口
   - name: 推流管理
     description: 推流管理相关接口
-  - name: 分享链接
-    description: 分享链接管理接口
+  - name: 分享
+    description: 分享码和分享链接接口
   - name: 系统
     description: 系统相关接口
   - name: Hook
@@ -709,10 +709,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /streams/share-code/verify:
+  /shares/verify-code:
     post:
       tags:
-        - 推流管理
+        - 分享
       summary: 验证分享码
       description: 游客通过此接口验证分享码，获取访问令牌
       operationId: verifyShareCode
@@ -727,7 +727,7 @@ paths:
               properties:
                 share_code:
                   type: string
-                  description: 分享码（8位）
+                  description: 分享码（6位）
       responses:
         '200':
           description: 验证成功
@@ -739,12 +739,14 @@ paths:
                   stream_key:
                     type: string
                     description: 推流密钥
-                  access_token:
+                  token:
                     type: string
                     description: 访问令牌
-                  stream:
-                    $ref: '#/components/schemas/Stream'
-        '401':
+                  expires_at:
+                    type: string
+                    format: date-time
+                    description: 过期时间
+        '404':
           description: 分享码无效
           content:
             application/json:
@@ -752,52 +754,79 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: invalid share code
-        '404':
-          description: 不存在
+        '410':
+          description: 直播已结束
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: stream has ended
+        '403':
+          description: 分享码使用次数已达上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: share code max uses reached
 
-  /streams/{key}/share-code/regenerate:
-    post:
+  /shares/link/{token}:
+    get:
       tags:
-        - 推流管理
-      summary: 重新生成分享码
-      description: 管理员重新生成私有直播的分享码，旧分享码将失效
-      operationId: regenerateShareCode
-      security:
-        - BearerAuth: []
+        - 分享
+      summary: 验证分享链接
+      description: 用户通过分享链接 token 获取访问权限
+      operationId: verifyShareLink
       parameters:
-        - name: key
+        - name: token
           in: path
           required: true
-          description: 推流密钥
+          description: 分享链接 token
           schema:
             type: string
       responses:
         '200':
-          description: 生成成功
+          description: 验证成功
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  share_code:
+                  stream_key:
                     type: string
-                    description: 新的分享码
-        '401':
-          description: 未授权
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                    description: 推流密钥
+                  token:
+                    type: string
+                    description: 访问令牌
+                  expires_at:
+                    type: string
+                    format: date-time
+                    description: 过期时间
         '404':
-          description: 不存在
+          description: 分享链接无效
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: invalid share link
+        '410':
+          description: 直播已结束
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: stream has ended
+        '403':
+          description: 分享链接使用次数已达上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: share link max uses reached
 
   /streams/{key}/kick:
     post:
@@ -837,22 +866,217 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  # ==================== 分享链接接口 ====================
-  /share-links:
+  # ==================== 分享码管理接口 ====================
+  /streams/{key}/share-code:
+    post:
+      tags:
+        - 分享
+      summary: 添加分享码
+      description: 管理员为私有直播添加分享码
+      operationId: addShareCode
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_uses:
+                  type: integer
+                  description: 最大使用次数（0表示不限制）
+                  default: 0
+      responses:
+        '200':
+          description: 添加成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+        '400':
+          description: 仅私有直播支持分享
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - 分享
+      summary: 重新生成分享码
+      description: 管理员重新生成私有直播的分享码，旧分享码将失效
+      operationId: regenerateShareCode
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_uses:
+                  type: integer
+                  description: 最大使用次数（0表示不限制）
+                  default: 0
+      responses:
+        '200':
+          description: 生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+        '400':
+          description: 仅私有直播支持分享
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags:
+        - 分享
+      summary: 更新分享码使用次数
+      description: 管理员更新分享码最大使用次数
+      operationId: updateShareCodeMaxUses
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - max_uses
+              properties:
+                max_uses:
+                  type: integer
+                  description: 最大使用次数（0表示不限制）
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+        '400':
+          description: 直播没有分享码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - 分享
+      summary: 删除分享码
+      description: 管理员删除分享码
+      operationId: deleteShareCode
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              example:
+                message: share code deleted
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ==================== 分享链接管理接口 ====================
+  /streams/{key}/share-links:
     get:
       tags:
-        - 分享链接
+        - 分享
       summary: 获取分享链接列表
-      description: 管理员获取分享链接列表
+      description: 管理员获取指定直播的分享链接列表
       operationId: listShareLinks
       security:
         - BearerAuth: []
       parameters:
-        - name: stream_id
-          in: query
-          description: 按直播 ID 过滤
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
           schema:
-            type: integer
+            type: string
       responses:
         '200':
           description: 成功
@@ -871,27 +1095,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '404':
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     post:
       tags:
-        - 分享链接
+        - 分享
       summary: 创建分享链接
       description: 管理员为私有直播创建分享链接
       operationId: createShareLink
       security:
         - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
+          schema:
+            type: string
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - stream_id
               properties:
-                stream_id:
-                  type: integer
-                  description: 直播 ID
                 max_uses:
                   type: integer
                   description: 最大使用次数（0表示不限制）
@@ -904,7 +1135,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ShareLink'
         '400':
-          description: 请求参数错误
+          description: 仅私有直播支持分享
           content:
             application/json:
               schema:
@@ -915,11 +1146,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '404':
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
-  /share-links/{id}:
+  /streams/share-links/{id}:
+    patch:
+      tags:
+        - 分享
+      summary: 更新分享链接使用次数
+      description: 管理员更新分享链接最大使用次数
+      operationId: updateShareLinkMaxUses
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 分享链接 ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - max_uses
+              properties:
+                max_uses:
+                  type: integer
+                  description: 最大使用次数（0表示不限制）
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLink'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     delete:
       tags:
-        - 分享链接
+        - 分享
       summary: 删除分享链接
       description: 管理员删除分享链接
       operationId: deleteShareLink
@@ -940,7 +1224,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Message'
               example:
-                message: deleted
+                message: share link deleted
         '401':
           description: 未授权
           content:
@@ -953,50 +1237,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
-  /share-links/verify:
-    post:
-      tags:
-        - 分享链接
-      summary: 验证分享链接
-      description: 用户通过分享链接 token 获取访问权限
-      operationId: verifyShareLink
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - token
-              properties:
-                token:
-                  type: string
-                  description: 分享链接 token
-      responses:
-        '200':
-          description: 验证成功
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  stream_key:
-                    type: string
-                    description: 推流密钥
-                  access_token:
-                    type: string
-                    description: 访问令牌
-                  stream:
-                    $ref: '#/components/schemas/Stream'
-        '401':
-          description: 分享链接无效
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                error: invalid share link
 
   # ==================== 系统接口 ====================
   /system/health:
