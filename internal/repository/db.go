@@ -2,32 +2,26 @@ package repository
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
 	"log"
+	"sort"
+	"strconv"
+	"strings"
 
 	"easy-stream/internal/config"
 
 	_ "github.com/lib/pq"
 )
 
-// 当前数据库版本
-const CurrentDBVersion = 1
+// 当前数据库最新版本
+const LatestDBVersion = 4
 
-// Migration 表示一个数据库迁移
-type Migration struct {
-	Version     int
-	Description string
-	Up          func(*sql.Tx) error
-}
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
-// 定义所有迁移
-var migrations = []Migration{
-	{
-		Version:     1,
-		Description: "初始化数据库结构",
-		Up:          migrationV1,
-	},
-}
+//go:embed init-db.sql
+var initDBSQL string
 
 // NewPostgresDB 创建 PostgreSQL 连接并执行迁移
 func NewPostgresDB(cfg config.DatabaseConfig) (*sql.DB, error) {
@@ -55,43 +49,85 @@ func NewPostgresDB(cfg config.DatabaseConfig) (*sql.DB, error) {
 
 // runMigrations 检查并执行数据库迁移
 func runMigrations(db *sql.DB) error {
-	// 确保迁移表存在
-	if err := ensureMigrationTable(db); err != nil {
+	// 检查是否是空数据库（schema_migrations 表不存在）
+	isEmpty, err := isDatabaseEmpty(db)
+	if err != nil {
 		return err
 	}
 
-	// 获取当前版本
+	if isEmpty {
+		// 空数据库：直接执行 init-db.sql 初始化到最新版本
+		log.Printf("检测到空数据库，执行初始化脚本...")
+		if err := initDatabase(db); err != nil {
+			return err
+		}
+		log.Printf("数据库初始化完成，版本: %d", LatestDBVersion)
+		return nil
+	}
+
+	// 已有数据：获取当前版本，依次执行迁移脚本
 	currentVersion, err := getCurrentVersion(db)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("当前数据库版本: %d, 目标版本: %d", currentVersion, CurrentDBVersion)
+	log.Printf("当前数据库版本: %d, 目标版本: %d", currentVersion, LatestDBVersion)
 
-	// 执行需要的迁移
-	for _, m := range migrations {
-		if m.Version > currentVersion {
-			log.Printf("执行迁移 v%d: %s", m.Version, m.Description)
-			if err := executeMigration(db, m); err != nil {
-				return fmt.Errorf("迁移 v%d 失败: %w", m.Version, err)
-			}
-			log.Printf("迁移 v%d 完成", m.Version)
+	if currentVersion >= LatestDBVersion {
+		log.Printf("数据库已是最新版本")
+		return nil
+	}
+
+	// 依次执行迁移脚本
+	for v := currentVersion + 1; v <= LatestDBVersion; v++ {
+		if err := executeMigrationFile(db, v); err != nil {
+			return fmt.Errorf("迁移 v%d 失败: %w", v, err)
 		}
+		log.Printf("迁移 v%d 完成", v)
 	}
 
 	return nil
 }
 
-// ensureMigrationTable 确保迁移表存在
-func ensureMigrationTable(db *sql.DB) error {
+// isDatabaseEmpty 检查数据库是否为空（schema_migrations 表不存在）
+func isDatabaseEmpty(db *sql.DB) (bool, error) {
+	var exists bool
 	query := `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version     INTEGER PRIMARY KEY,
-			description VARCHAR(256) NOT NULL,
-			applied_at  TIMESTAMP DEFAULT NOW()
-		)`
-	_, err := db.Exec(query)
-	return err
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables
+			WHERE table_schema = 'public'
+			AND table_name = 'schema_migrations'
+		)
+	`
+	if err := db.QueryRow(query).Scan(&exists); err != nil {
+		return false, err
+	}
+	return !exists, nil
+}
+
+// initDatabase 执行 init-db.sql 初始化数据库
+func initDatabase(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 执行初始化脚本
+	if _, err := tx.Exec(initDBSQL); err != nil {
+		return fmt.Errorf("执行 init-db.sql 失败: %w", err)
+	}
+
+	// 记录版本号
+	_, err = tx.Exec(
+		"INSERT INTO schema_migrations (version, description) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING",
+		LatestDBVersion, "初始化数据库到最新版本",
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // getCurrentVersion 获取当前数据库版本
@@ -104,23 +140,40 @@ func getCurrentVersion(db *sql.DB) (int, error) {
 	return version, nil
 }
 
-// executeMigration 执行单个迁移
-func executeMigration(db *sql.DB, m Migration) error {
+// executeMigrationFile 执行指定版本的迁移文件
+func executeMigrationFile(db *sql.DB, version int) error {
+	// 查找对应版本的迁移文件
+	filename, err := findMigrationFile(version)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("执行迁移文件: %s", filename)
+
+	// 读取迁移文件内容
+	content, err := migrationsFS.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("读取迁移文件失败: %w", err)
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	// 执行迁移
-	if err := m.Up(tx); err != nil {
-		return err
+	// 执行迁移脚本
+	if _, err := tx.Exec(string(content)); err != nil {
+		return fmt.Errorf("执行迁移脚本失败: %w", err)
 	}
+
+	// 从文件名提取描述
+	description := extractDescription(filename)
 
 	// 记录迁移版本
 	_, err = tx.Exec(
 		"INSERT INTO schema_migrations (version, description) VALUES ($1, $2)",
-		m.Version, m.Description,
+		version, description,
 	)
 	if err != nil {
 		return err
@@ -129,108 +182,54 @@ func executeMigration(db *sql.DB, m Migration) error {
 	return tx.Commit()
 }
 
-// migrationV1 创建初始表结构
-func migrationV1(tx *sql.Tx) error {
-	// 创建用户表
-	if _, err := tx.Exec(`
-		CREATE TABLE IF NOT EXISTS users (
-			id              SERIAL PRIMARY KEY,
-			username        VARCHAR(64) UNIQUE NOT NULL,
-			password_hash   VARCHAR(256) NOT NULL,
-			email           VARCHAR(128),
-			phone           VARCHAR(32),
-			real_name       VARCHAR(64),
-			avatar          VARCHAR(256),
-			last_login_at   TIMESTAMP,
-			created_at      TIMESTAMP DEFAULT NOW(),
-			updated_at      TIMESTAMP DEFAULT NOW()
-		)
-	`); err != nil {
-		return err
+// findMigrationFile 查找指定版本的迁移文件
+func findMigrationFile(version int) (string, error) {
+	entries, err := migrationsFS.ReadDir("migrations")
+	if err != nil {
+		return "", err
 	}
 
-	// 创建用户表索引
-	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`); err != nil {
-		return err
-	}
-
-	// 创建推流表
-	if _, err := tx.Exec(`
-		CREATE TABLE IF NOT EXISTS streams (
-			id                      SERIAL PRIMARY KEY,
-			stream_key              VARCHAR(64) UNIQUE NOT NULL,
-			name                    VARCHAR(128) NOT NULL,
-			description             TEXT,
-			device_id               VARCHAR(64),
-			status                  VARCHAR(16) DEFAULT 'idle',
-			visibility              VARCHAR(16) DEFAULT 'public',
-			password                VARCHAR(256),
-			record_enabled          BOOLEAN DEFAULT FALSE,
-			record_files            JSONB DEFAULT '[]',
-			protocol                VARCHAR(16),
-			bitrate                 INTEGER DEFAULT 0,
-			fps                     INTEGER DEFAULT 0,
-			streamer_name           VARCHAR(64) NOT NULL,
-			streamer_contact        VARCHAR(128),
-			scheduled_start_time    TIMESTAMP NOT NULL,
-			scheduled_end_time      TIMESTAMP NOT NULL,
-			auto_kick_delay         INTEGER DEFAULT 30,
-			actual_start_time       TIMESTAMP,
-			actual_end_time         TIMESTAMP,
-			last_frame_at           TIMESTAMP,
-			current_viewers         INTEGER DEFAULT 0,
-			total_viewers           INTEGER DEFAULT 0,
-			peak_viewers            INTEGER DEFAULT 0,
-			created_by              INTEGER REFERENCES users(id),
-			created_at              TIMESTAMP DEFAULT NOW(),
-			updated_at              TIMESTAMP DEFAULT NOW()
-		)
-	`); err != nil {
-		return err
-	}
-
-	// 创建推流表索引
-	indexes := []string{
-		`CREATE INDEX IF NOT EXISTS idx_streams_status ON streams(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_streams_visibility ON streams(visibility)`,
-		`CREATE INDEX IF NOT EXISTS idx_streams_device_id ON streams(device_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_streams_created_by ON streams(created_by)`,
-		`CREATE INDEX IF NOT EXISTS idx_streams_scheduled_start ON streams(scheduled_start_time)`,
-		`CREATE INDEX IF NOT EXISTS idx_streams_scheduled_end ON streams(scheduled_end_time)`,
-		`CREATE INDEX IF NOT EXISTS idx_streams_record_enabled ON streams(record_enabled)`,
-	}
-	for _, idx := range indexes {
-		if _, err := tx.Exec(idx); err != nil {
-			return err
+	prefix := fmt.Sprintf("%03d_", version)
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), prefix) && strings.HasSuffix(entry.Name(), ".sql") {
+			return "migrations/" + entry.Name(), nil
 		}
 	}
 
-	// 创建操作日志表
-	if _, err := tx.Exec(`
-		CREATE TABLE IF NOT EXISTS operation_logs (
-			id              SERIAL PRIMARY KEY,
-			user_id         INTEGER REFERENCES users(id),
-			action          VARCHAR(64) NOT NULL,
-			target_type     VARCHAR(32),
-			target_id       VARCHAR(64),
-			detail          JSONB,
-			created_at      TIMESTAMP DEFAULT NOW()
-		)
-	`); err != nil {
-		return err
+	return "", fmt.Errorf("未找到版本 %d 的迁移文件", version)
+}
+
+// extractDescription 从文件名提取描述
+func extractDescription(filename string) string {
+	// migrations/004_add_share_feature.sql -> add_share_feature
+	base := strings.TrimPrefix(filename, "migrations/")
+	base = strings.TrimSuffix(base, ".sql")
+	parts := strings.SplitN(base, "_", 2)
+	if len(parts) == 2 {
+		return strings.ReplaceAll(parts[1], "_", " ")
+	}
+	return base
+}
+
+// GetMigrationVersions 获取所有可用的迁移版本（用于调试）
+func GetMigrationVersions() ([]int, error) {
+	entries, err := migrationsFS.ReadDir("migrations")
+	if err != nil {
+		return nil, err
 	}
 
-	// 创建操作日志表索引
-	logIndexes := []string{
-		`CREATE INDEX IF NOT EXISTS idx_logs_user_id ON operation_logs(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_logs_created_at ON operation_logs(created_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_logs_action ON operation_logs(action)`,
-	}
-	for _, idx := range logIndexes {
-		if _, err := tx.Exec(idx); err != nil {
-			return err
+	var versions []int
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".sql") {
+			parts := strings.SplitN(entry.Name(), "_", 2)
+			if len(parts) >= 1 {
+				if v, err := strconv.Atoi(parts[0]); err == nil {
+					versions = append(versions, v)
+				}
+			}
 		}
 	}
 
-	return nil
+	sort.Ints(versions)
+	return versions, nil
 }
