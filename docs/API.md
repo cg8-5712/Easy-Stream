@@ -6,8 +6,9 @@
 - [认证机制](#认证机制)
 - [认证接口](#1-认证接口)
 - [推流管理接口](#2-推流管理接口)
-- [系统接口](#3-系统接口)
-- [ZLMediaKit Hook 接口](#4-zlmediakit-hook-接口)
+- [分享链接接口](#3-分享链接接口)
+- [系统接口](#4-系统接口)
+- [ZLMediaKit Hook 接口](#5-zlmediakit-hook-接口)
 - [数据模型](#数据模型)
 - [错误码](#错误码)
 
@@ -295,7 +296,6 @@ Authorization: Bearer {access_token}
 | description | string | 否 | 直播描述 |
 | device_id | string | 否 | 设备 ID |
 | visibility | string | 是 | 可见性：`public`/`private` |
-| password | string | 条件必填 | 私有直播密码（visibility=private 时必填） |
 | record_enabled | bool | 否 | 是否开启录制，默认 false |
 | streamer_name | string | 是 | 直播人员姓名 |
 | streamer_contact | string | 否 | 直播人员联系方式 |
@@ -324,12 +324,13 @@ Authorization: Bearer {access_token}
 {
   "name": "内部会议",
   "visibility": "private",
-  "password": "meeting123",
   "streamer_name": "李四",
   "scheduled_start_time": "2024-01-01T14:00:00Z",
   "scheduled_end_time": "2024-01-01T16:00:00Z"
 }
 ```
+
+> 私有直播创建后会自动生成分享码，可通过分享码或分享链接访问。
 
 **响应示例** (201 Created)
 ```json
@@ -457,7 +458,7 @@ GET /api/v1/streams/:key
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| access_token | string | 否 | 私有直播访问令牌（通过密码验证获取） |
+| access_token | string | 否 | 私有直播访问令牌（通过分享码或分享链接获取） |
 
 **请求示例**
 ```
@@ -509,37 +510,31 @@ GET /api/v1/streams/abc123def456?access_token=xyz789...
 403 Forbidden (私有直播无权限):
 ```json
 {
-  "error": "private stream requires password"
+  "error": "private stream requires access token"
 }
 ```
 
 ---
 
-### 2.5 验证私有直播密码（游客）
+### 2.5 验证分享码（游客）
 
-> 游客通过此接口验证私有直播密码，获取访问令牌
+> 游客通过此接口验证分享码，获取访问令牌
 
 **接口地址**
 ```
-POST /api/v1/streams/:key/verify
+POST /api/v1/streams/share-code/verify
 ```
-
-**路径参数**
-
-| 参数名 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| key | string | 是 | 推流密钥 |
 
 **请求参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| password | string | 是 | 私有直播密码 |
+| share_code | string | 是 | 分享码（8位） |
 
 **请求示例**
 ```json
 {
-  "password": "meeting123"
+  "share_code": "Ab3xK9mN"
 }
 ```
 
@@ -547,14 +542,20 @@ POST /api/v1/streams/:key/verify
 ```json
 {
   "stream_key": "abc123def456",
-  "token": "xyz789abc123...",
-  "expires_at": "2024-01-01T18:00:00Z"
+  "access_token": "xyz789abc123...",
+  "stream": {
+    "id": 1,
+    "stream_key": "abc123def456",
+    "name": "内部会议",
+    "status": "pushing",
+    ...
+  }
 }
 ```
 
 **使用方式**
 
-获取 token 后，可通过以下方式访问私有直播：
+获取 access_token 后，可通过以下方式访问私有直播：
 1. 查询参数：`GET /api/v1/streams/:key?access_token={token}`
 2. 分享链接：`https://example.com/live/{stream_key}?access_token={token}`
 
@@ -563,13 +564,42 @@ POST /api/v1/streams/:key/verify
 401 Unauthorized:
 ```json
 {
-  "error": "invalid password"
+  "error": "invalid share code"
 }
 ```
 
 ---
 
-### 2.6 更新推流信息（管理员）
+### 2.6 重新生成分享码（管理员）
+
+> 管理员可以重新生成私有直播的分享码，旧分享码将失效
+
+**接口地址**
+```
+POST /api/v1/streams/:key/share-code/regenerate
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+
+**响应示例** (200 OK)
+```json
+{
+  "share_code": "Xy7pQ2wR"
+}
+```
+
+---
+
+### 2.7 更新推流信息（管理员）
 
 **接口地址**
 ```
@@ -595,7 +625,7 @@ Authorization: Bearer {access_token}
 | description | string | 否 | 直播描述 |
 | device_id | string | 否 | 设备 ID |
 | visibility | string | 否 | 可见性：`public`/`private` |
-| password | string | 否 | 私有直播密码 |
+| share_code_max_uses | int | 否 | 分享码最大使用次数（0表示不限制） |
 | record_enabled | bool | 否 | 是否开启录制（支持推流中动态修改） |
 | streamer_name | string | 否 | 直播人员姓名 |
 | streamer_contact | string | 否 | 直播人员联系方式 |
@@ -636,7 +666,7 @@ Authorization: Bearer {access_token}
 
 ---
 
-### 2.7 删除推流码（管理员）
+### 2.8 删除推流码（管理员）
 
 **接口地址**
 ```
@@ -657,7 +687,7 @@ Authorization: Bearer {access_token}
 
 ---
 
-### 2.8 强制断流（管理员）
+### 2.9 强制断流（管理员）
 
 **接口地址**
 ```
@@ -678,9 +708,173 @@ Authorization: Bearer {access_token}
 
 ---
 
-## 3. 系统接口
+## 3. 分享链接接口
 
-### 3.1 健康检查
+> 管理员可以为私有直播创建分享链接，用户通过分享链接可以直接获取访问权限
+
+### 3.1 获取分享链接列表（管理员）
+
+**接口地址**
+```
+GET /api/v1/share-links
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**查询参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| stream_id | int | 否 | 按直播 ID 过滤 |
+
+**响应示例** (200 OK)
+```json
+{
+  "share_links": [
+    {
+      "id": 1,
+      "stream_id": 5,
+      "token": "abc123xyz789...",
+      "max_uses": 100,
+      "used_count": 25,
+      "created_by": 1,
+      "created_at": "2024-01-01T10:00:00Z",
+      "stream": {
+        "id": 5,
+        "stream_key": "test-stream-004",
+        "name": "内部会议"
+      }
+    }
+  ]
+}
+```
+
+---
+
+### 3.2 创建分享链接（管理员）
+
+**接口地址**
+```
+POST /api/v1/share-links
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| stream_id | int | 是 | 直播 ID |
+| max_uses | int | 否 | 最大使用次数（0表示不限制） |
+
+**请求示例**
+```json
+{
+  "stream_id": 5,
+  "max_uses": 100
+}
+```
+
+**响应示例** (201 Created)
+```json
+{
+  "id": 1,
+  "stream_id": 5,
+  "token": "abc123xyz789...",
+  "max_uses": 100,
+  "used_count": 0,
+  "created_by": 1,
+  "created_at": "2024-01-01T10:00:00Z",
+  "share_url": "https://example.com/live/test-stream-004?share_token=abc123xyz789..."
+}
+```
+
+---
+
+### 3.3 删除分享链接（管理员）
+
+**接口地址**
+```
+DELETE /api/v1/share-links/:id
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| id | int | 是 | 分享链接 ID |
+
+**响应示例** (200 OK)
+```json
+{
+  "message": "deleted"
+}
+```
+
+---
+
+### 3.4 验证分享链接（游客）
+
+> 用户通过分享链接访问时，验证 token 获取访问权限
+
+**接口地址**
+```
+POST /api/v1/share-links/verify
+```
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| token | string | 是 | 分享链接 token |
+
+**请求示例**
+```json
+{
+  "token": "abc123xyz789..."
+}
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "stream_key": "test-stream-004",
+  "access_token": "xyz789abc123...",
+  "stream": {
+    "id": 5,
+    "stream_key": "test-stream-004",
+    "name": "内部会议",
+    "status": "pushing",
+    ...
+  }
+}
+```
+
+**错误响应**
+
+401 Unauthorized:
+```json
+{
+  "error": "invalid share link"
+}
+```
+
+---
+
+## 4. 系统接口
+
+### 4.1 健康检查
 
 **接口地址**
 ```
@@ -698,7 +892,7 @@ GET /api/v1/system/health
 
 ---
 
-### 3.2 系统统计（管理员）
+### 4.2 系统统计（管理员）
 
 **接口地址**
 ```
@@ -720,11 +914,11 @@ Authorization: Bearer {access_token}
 
 ---
 
-## 4. ZLMediaKit Hook 接口
+## 5. ZLMediaKit Hook 接口
 
 > 这些接口由 ZLMediaKit 流媒体服务器调用，无需认证
 
-### 4.1 推流开始回调
+### 5.1 推流开始回调
 
 ```
 POST /api/v1/hooks/on_publish
@@ -776,25 +970,27 @@ POST /api/v1/hooks/on_publish
 
 > ⚠️ **安全说明**: 无效或不存在的推流码将被拒绝，ZLMediaKit 会自动断开该推流连接。
 
-### 4.2 推流结束回调
+### 5.2 推流结束回调
 
 ```
 POST /api/v1/hooks/on_unpublish
 ```
 
-### 4.3 流量统计回调
+> 推流结束时，系统会自动清理该直播的所有访问令牌（分享码和分享链接生成的令牌都会失效）
+
+### 5.3 流量统计回调
 
 ```
 POST /api/v1/hooks/on_flow_report
 ```
 
-### 4.4 无人观看回调
+### 5.4 无人观看回调
 
 ```
 POST /api/v1/hooks/on_stream_none_reader
 ```
 
-### 4.5 播放开始回调
+### 5.5 播放开始回调
 
 ```
 POST /api/v1/hooks/on_play
@@ -815,7 +1011,7 @@ POST /api/v1/hooks/on_play
 
 **说明**: 当有观众开始观看直播时，ZLMediaKit 会调用此接口。系统会自动增加当前观看人数和累计观看人次。
 
-### 4.6 播放器断开回调
+### 5.6 播放器断开回调
 
 ```
 POST /api/v1/hooks/on_player_disconnect
@@ -870,6 +1066,9 @@ POST /api/v1/hooks/on_player_disconnect
   device_id: string             // 设备 ID
   status: string                // 状态: idle / pushing / ended
   visibility: string            // 可见性: public / private
+  share_code: string            // 分享码（私有直播自动生成，8位）
+  share_code_max_uses: number   // 分享码最大使用次数（0表示不限制）
+  share_code_used_count: number // 分享码已使用次数
   record_enabled: boolean       // 是否开启录制
   record_files: string[]        // 录制文件路径列表（多次开关录制会生成多个文件）
   protocol: string              // 协议: rtmp / rtsp / srt
@@ -890,6 +1089,21 @@ POST /api/v1/hooks/on_player_disconnect
   created_by: number            // 创建者用户 ID
   created_at: string            // 创建时间
   updated_at: string            // 更新时间
+}
+```
+
+### ShareLink (分享链接)
+
+```typescript
+{
+  id: number              // 分享链接 ID
+  stream_id: number       // 关联的直播 ID
+  token: string           // 分享链接 token（64位）
+  max_uses: number        // 最大使用次数（0表示不限制）
+  used_count: number      // 已使用次数
+  created_by: number      // 创建者用户 ID
+  created_at: string      // 创建时间
+  stream: Stream          // 关联的直播信息（可选）
 }
 ```
 
@@ -924,8 +1138,13 @@ POST /api/v1/hooks/on_player_disconnect
 | invalid credentials | 用户名或密码错误 |
 | invalid or expired refresh token | 刷新令牌无效或已过期 |
 | stream not found | 推流不存在 |
-| private stream requires password | 私有直播需要密码 |
-| invalid password | 密码错误 |
+| private stream requires access token | 私有直播需要访问令牌 |
+| invalid share code | 分享码无效 |
+| invalid share link | 分享链接无效 |
+| share code max uses reached | 分享码使用次数已达上限 |
+| share link max uses reached | 分享链接使用次数已达上限 |
+| stream has ended | 直播已结束 |
+| only private streams support sharing | 仅私有直播支持分享功能 |
 
 ---
 
@@ -946,6 +1165,45 @@ POST /api/v1/hooks/on_player_disconnect
 
 ---
 
+## 私有直播访问机制
+
+私有直播支持两种访问方式：
+
+### 1. 分享码访问
+
+- 私有直播创建时自动生成 8 位分享码
+- 用户输入分享码验证后获取访问令牌
+- 支持设置最大使用次数限制
+- 直播结束后分享码自动失效
+- 管理员可重新生成分享码（旧分享码失效）
+
+**访问流程**:
+```
+1. 用户获取分享码（由管理员提供）
+2. 调用 POST /api/v1/streams/share-code/verify 验证分享码
+3. 获取 access_token
+4. 使用 access_token 访问直播内容
+```
+
+### 2. 分享链接访问
+
+- 管理员手动创建分享链接（64位 token）
+- 用户通过链接直接获取访问权限
+- 支持设置最大使用次数限制
+- 直播结束后分享链接自动失效
+- 可创建多个分享链接
+
+**访问流程**:
+```
+1. 管理员创建分享链接
+2. 用户点击分享链接（包含 share_token 参数）
+3. 前端调用 POST /api/v1/share-links/verify 验证 token
+4. 获取 access_token
+5. 使用 access_token 访问直播内容
+```
+
+---
+
 ## 默认账号
 
 | 用户名 | 密码 | 角色 |
@@ -956,5 +1214,5 @@ POST /api/v1/hooks/on_player_disconnect
 
 ---
 
-**文档版本**: v2.0
-**最后更新**: 2026-01-13
+**文档版本**: v2.1
+**最后更新**: 2026-01-16
