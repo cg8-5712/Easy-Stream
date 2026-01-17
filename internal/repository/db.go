@@ -15,7 +15,7 @@ import (
 )
 
 // 当前数据库最新版本
-const LatestDBVersion = 4
+const LatestDBVersion = 5
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
