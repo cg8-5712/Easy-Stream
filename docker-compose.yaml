@@ -82,6 +82,9 @@ services:
       - "10000:10000/udp"
       # SRT 推流/拉流
       - "9000:9000/udp"
+      # WebRTC 端口范围
+      - "8000:8000/udp"
+      - "8000:8000/tcp"
     environment:
       # API 密钥，需与 config.yaml 中的 zlmediakit.secret 一致
       - SECRET=035c73f7-bb6b-4889-a715-d9eb2d1925cc
