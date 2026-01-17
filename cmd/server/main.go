@@ -30,6 +30,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
+	log.Printf("Database connected successfully: %s:%s/%s", cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName)
 	defer db.Close()
 
 	// 初始化 Redis
@@ -37,6 +38,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to redis: %v", err)
 	}
+	log.Printf("Redis connected successfully: %s:%s", cfg.Redis.Host, cfg.Redis.Port)
 	defer rdb.Close()
 
 	// Debug 模式下插入种子数据
@@ -52,7 +54,7 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 
 	// 初始化 Service
-	streamSvc := service.NewStreamService(streamRepo, rdb, cfg.ZLMediaKit)
+	streamSvc := service.NewStreamService(streamRepo, shareLinkRepo, rdb, cfg.ZLMediaKit)
 	shareLinkSvc := service.NewShareLinkService(shareLinkRepo, streamRepo, rdb)
 	authSvc := service.NewAuthService(userRepo, rdb, cfg.JWT)
 

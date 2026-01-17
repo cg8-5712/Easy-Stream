@@ -59,8 +59,14 @@ func (r *RedisClient) DeleteRefreshToken(token string) error {
 // SetStreamAccessToken 存储私有直播访问令牌
 func (r *RedisClient) SetStreamAccessToken(streamKey, token string, expiration time.Duration) error {
 	ctx := context.Background()
+	// 存储 token 验证用
 	key := fmt.Sprintf("stream_access:%s:%s", streamKey, token)
-	return r.Set(ctx, key, "1", expiration).Err()
+	if err := r.Set(ctx, key, "1", expiration).Err(); err != nil {
+		return err
+	}
+	// 存储反向索引：token -> streamKey
+	reverseKey := fmt.Sprintf("access_token_stream:%s", token)
+	return r.Set(ctx, reverseKey, streamKey, expiration).Err()
 }
 
 // VerifyStreamAccessToken 验证私有直播访问令牌
@@ -107,25 +113,39 @@ func (r *RedisClient) DeleteStreamAccessTokens(streamKey string) error {
 // GetStreamKeyByAccessToken 通过访问令牌获取 stream_key
 func (r *RedisClient) GetStreamKeyByAccessToken(token string) (string, error) {
 	ctx := context.Background()
+
+	// 先尝试从反向索引获取（新方式）
+	key := fmt.Sprintf("access_token_stream:%s", token)
+	streamKey, err := r.Get(ctx, key).Result()
+	if err == nil && streamKey != "" {
+		return streamKey, nil
+	}
+
+	// 降级：使用 SCAN 匹配（兼容旧 token）
 	pattern := fmt.Sprintf("stream_access:*:%s", token)
+	var cursor uint64
+	for {
+		keys, nextCursor, err := r.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return "", err
+		}
 
-	keys, _, err := r.Scan(ctx, 0, pattern, 10).Result()
-	if err != nil {
-		return "", err
+		if len(keys) > 0 {
+			// 从 key 中提取 stream_key，格式: stream_access:{streamKey}:{token}
+			k := keys[0]
+			prefix := "stream_access:"
+			suffix := ":" + token
+			if len(k) > len(prefix)+len(suffix) {
+				return k[len(prefix) : len(k)-len(suffix)], nil
+			}
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
 	}
 
-	if len(keys) == 0 {
-		return "", nil
-	}
-
-	// 从 key 中提取 stream_key，格式: stream_access:{streamKey}:{token}
-	key := keys[0]
-	// 去掉前缀 "stream_access:" 和后缀 ":{token}"
-	prefix := "stream_access:"
-	suffix := ":" + token
-	if len(key) > len(prefix)+len(suffix) {
-		return key[len(prefix) : len(key)-len(suffix)], nil
-	}
 	return "", nil
 }
 

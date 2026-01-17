@@ -14,16 +14,18 @@ import (
 )
 
 type StreamService struct {
-	streamRepo *repository.StreamRepository
-	redisRepo  *repository.RedisClient
-	zlmClient  *zlm.Client
+	streamRepo    *repository.StreamRepository
+	shareLinkRepo *repository.ShareLinkRepository
+	redisRepo     *repository.RedisClient
+	zlmClient     *zlm.Client
 }
 
-func NewStreamService(streamRepo *repository.StreamRepository, redisRepo *repository.RedisClient, zlmCfg config.ZLMediaKitConfig) *StreamService {
+func NewStreamService(streamRepo *repository.StreamRepository, shareLinkRepo *repository.ShareLinkRepository, redisRepo *repository.RedisClient, zlmCfg config.ZLMediaKitConfig) *StreamService {
 	return &StreamService{
-		streamRepo: streamRepo,
-		redisRepo:  redisRepo,
-		zlmClient:  zlm.NewClient(zlmCfg.Host, zlmCfg.Port, zlmCfg.Secret),
+		streamRepo:    streamRepo,
+		shareLinkRepo: shareLinkRepo,
+		redisRepo:     redisRepo,
+		zlmClient:     zlm.NewClient(zlmCfg.Host, zlmCfg.Port, zlmCfg.Secret),
 	}
 }
 
@@ -129,23 +131,31 @@ func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool, acce
 
 	// 如果游客传入了 access_token，尝试获取对应的私有直播
 	if !isLoggedIn && accessToken != "" {
+		fmt.Printf("[DEBUG] List: accessToken provided: %s\n", accessToken[:min(16, len(accessToken))]+"...")
 		streamKey, err := s.redisRepo.GetStreamKeyByAccessToken(accessToken)
+		fmt.Printf("[DEBUG] List: GetStreamKeyByAccessToken result: streamKey=%s, err=%v\n", streamKey, err)
 		if err == nil && streamKey != "" {
 			// 获取对应的私有直播
 			privateStream, err := s.streamRepo.GetByKey(streamKey)
-			if err == nil && privateStream != nil && privateStream.Status == model.StreamStatusPushing {
-				// 检查是否已经在列表中（理论上不会，因为私有直播不会出现在公开列表中）
-				found := false
-				for _, stream := range streams {
-					if stream.ID == privateStream.ID {
-						found = true
-						break
+			fmt.Printf("[DEBUG] List: GetByKey result: stream=%v, err=%v\n", privateStream != nil, err)
+			if err == nil && privateStream != nil {
+				fmt.Printf("[DEBUG] List: privateStream.Status=%s\n", privateStream.Status)
+				// 只要不是已结束的直播就可以显示
+				if privateStream.Status != model.StreamStatusEnded {
+					// 检查是否已经在列表中
+					found := false
+					for _, stream := range streams {
+						if stream.ID == privateStream.ID {
+							found = true
+							break
+						}
 					}
-				}
-				if !found {
-					// 将私有直播添加到列表开头
-					streams = append([]*model.Stream{privateStream}, streams...)
-					total++
+					if !found {
+						// 将私有直播添加到列表开头
+						streams = append([]*model.Stream{privateStream}, streams...)
+						total++
+						fmt.Printf("[DEBUG] List: Added private stream to list\n")
+					}
 				}
 			}
 		}
@@ -471,6 +481,18 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 		fmt.Printf("failed to delete access tokens for stream %s: %v\n", req.Stream, err)
 	}
 
+	// 清理分享码
+	if stream.ShareCode != nil {
+		if err := s.streamRepo.DeleteShareCode(req.Stream); err != nil {
+			fmt.Printf("failed to delete share code for stream %s: %v\n", req.Stream, err)
+		}
+	}
+
+	// 清理分享链接
+	if err := s.shareLinkRepo.DeleteByStreamKey(req.Stream); err != nil {
+		fmt.Printf("failed to delete share links for stream %s: %v\n", req.Stream, err)
+	}
+
 	// 重置当前观看人数
 	s.streamRepo.ResetCurrentViewers(req.Stream)
 
@@ -479,6 +501,9 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 	stream.ActualEndTime = &now
 	stream.Status = model.StreamStatusEnded
 	stream.CurrentViewers = 0
+	stream.ShareCode = nil
+	stream.ShareCodeMaxUses = 0
+	stream.ShareCodeUsedCount = 0
 	return s.streamRepo.Update(stream)
 }
 
