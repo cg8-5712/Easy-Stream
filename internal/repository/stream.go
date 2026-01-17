@@ -51,7 +51,7 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
-			   actual_start_time, actual_end_time, last_frame_at,
+			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
 			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams WHERE stream_key = $1
@@ -66,7 +66,7 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 		&stream.Protocol, &stream.Bitrate, &stream.FPS,
 		&stream.StreamerName, &stream.StreamerContact,
 		&stream.ScheduledStartTime, &stream.ScheduledEndTime, &stream.AutoKickDelay,
-		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastFrameAt,
+		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastUnpublishAt, &stream.LastFrameAt,
 		&stream.CurrentViewers, &stream.TotalViewers, &stream.PeakViewers,
 		&stream.CreatedBy, &stream.CreatedAt, &stream.UpdatedAt,
 	)
@@ -84,7 +84,7 @@ func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
-			   actual_start_time, actual_end_time, last_frame_at,
+			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
 			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams WHERE id = $1
@@ -99,7 +99,7 @@ func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 		&stream.Protocol, &stream.Bitrate, &stream.FPS,
 		&stream.StreamerName, &stream.StreamerContact,
 		&stream.ScheduledStartTime, &stream.ScheduledEndTime, &stream.AutoKickDelay,
-		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastFrameAt,
+		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastUnpublishAt, &stream.LastFrameAt,
 		&stream.CurrentViewers, &stream.TotalViewers, &stream.PeakViewers,
 		&stream.CreatedBy, &stream.CreatedAt, &stream.UpdatedAt,
 	)
@@ -168,7 +168,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
-			   actual_start_time, actual_end_time, last_frame_at,
+			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
 			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams` + whereClause + ` ORDER BY created_at DESC LIMIT $` +
@@ -192,7 +192,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 			&s.Protocol, &s.Bitrate, &s.FPS,
 			&s.StreamerName, &s.StreamerContact,
 			&s.ScheduledStartTime, &s.ScheduledEndTime, &s.AutoKickDelay,
-			&s.ActualStartTime, &s.ActualEndTime, &s.LastFrameAt,
+			&s.ActualStartTime, &s.ActualEndTime, &s.LastUnpublishAt, &s.LastFrameAt,
 			&s.CurrentViewers, &s.TotalViewers, &s.PeakViewers,
 			&s.CreatedBy, &s.CreatedAt, &s.UpdatedAt,
 		)
@@ -214,10 +214,10 @@ func (r *StreamRepository) Update(stream *model.Stream) error {
 			protocol=$11, bitrate=$12, fps=$13,
 			streamer_name=$14, streamer_contact=$15,
 			scheduled_start_time=$16, scheduled_end_time=$17, auto_kick_delay=$18,
-			actual_start_time=$19, actual_end_time=$20, last_frame_at=$21,
-			current_viewers=$22, total_viewers=$23, peak_viewers=$24,
-			updated_at=$25
-		WHERE stream_key=$26
+			actual_start_time=$19, actual_end_time=$20, last_unpublish_at=$21, last_frame_at=$22,
+			current_viewers=$23, total_viewers=$24, peak_viewers=$25,
+			updated_at=$26
+		WHERE stream_key=$27
 	`
 	recordFiles, _ := stream.RecordFiles.Value()
 	_, err := r.db.Exec(query,
@@ -228,7 +228,7 @@ func (r *StreamRepository) Update(stream *model.Stream) error {
 		stream.Protocol, stream.Bitrate, stream.FPS,
 		stream.StreamerName, stream.StreamerContact,
 		stream.ScheduledStartTime, stream.ScheduledEndTime, stream.AutoKickDelay,
-		stream.ActualStartTime, stream.ActualEndTime, stream.LastFrameAt,
+		stream.ActualStartTime, stream.ActualEndTime, stream.LastUnpublishAt, stream.LastFrameAt,
 		stream.CurrentViewers, stream.TotalViewers, stream.PeakViewers,
 		time.Now(), stream.StreamKey,
 	)
@@ -269,7 +269,7 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
-			   actual_start_time, actual_end_time, last_frame_at,
+			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
 			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams WHERE status = $1
@@ -291,7 +291,49 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 			&s.Protocol, &s.Bitrate, &s.FPS,
 			&s.StreamerName, &s.StreamerContact,
 			&s.ScheduledStartTime, &s.ScheduledEndTime, &s.AutoKickDelay,
-			&s.ActualStartTime, &s.ActualEndTime, &s.LastFrameAt,
+			&s.ActualStartTime, &s.ActualEndTime, &s.LastUnpublishAt, &s.LastFrameAt,
+			&s.CurrentViewers, &s.TotalViewers, &s.PeakViewers,
+			&s.CreatedBy, &s.CreatedAt, &s.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		streams = append(streams, s)
+	}
+	return streams, nil
+}
+
+// GetIdleStreams 获取所有空闲状态的直播（用于检查自动结束）
+func (r *StreamRepository) GetIdleStreams() ([]*model.Stream, error) {
+	query := `
+		SELECT id, stream_key, name, description, device_id, status, visibility,
+			   share_code, share_code_max_uses, share_code_used_count,
+			   record_enabled, record_files,
+			   protocol, bitrate, fps, streamer_name, streamer_contact,
+			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
+			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
+			   current_viewers, total_viewers, peak_viewers,
+			   created_by, created_at, updated_at
+		FROM streams WHERE status = $1
+	`
+	rows, err := r.db.Query(query, model.StreamStatusIdle)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	streams := make([]*model.Stream, 0)
+	for rows.Next() {
+		s := &model.Stream{}
+		err := rows.Scan(
+			&s.ID, &s.StreamKey, &s.Name, &s.Description,
+			&s.DeviceID, &s.Status, &s.Visibility,
+			&s.ShareCode, &s.ShareCodeMaxUses, &s.ShareCodeUsedCount,
+			&s.RecordEnabled, &s.RecordFiles,
+			&s.Protocol, &s.Bitrate, &s.FPS,
+			&s.StreamerName, &s.StreamerContact,
+			&s.ScheduledStartTime, &s.ScheduledEndTime, &s.AutoKickDelay,
+			&s.ActualStartTime, &s.ActualEndTime, &s.LastUnpublishAt, &s.LastFrameAt,
 			&s.CurrentViewers, &s.TotalViewers, &s.PeakViewers,
 			&s.CreatedBy, &s.CreatedAt, &s.UpdatedAt,
 		)
@@ -350,7 +392,7 @@ func (r *StreamRepository) GetByShareCode(shareCode string) (*model.Stream, erro
 			   record_enabled, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
-			   actual_start_time, actual_end_time, last_frame_at,
+			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
 			   current_viewers, total_viewers, peak_viewers,
 			   created_by, created_at, updated_at
 		FROM streams WHERE share_code = $1
@@ -365,7 +407,7 @@ func (r *StreamRepository) GetByShareCode(shareCode string) (*model.Stream, erro
 		&stream.Protocol, &stream.Bitrate, &stream.FPS,
 		&stream.StreamerName, &stream.StreamerContact,
 		&stream.ScheduledStartTime, &stream.ScheduledEndTime, &stream.AutoKickDelay,
-		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastFrameAt,
+		&stream.ActualStartTime, &stream.ActualEndTime, &stream.LastUnpublishAt, &stream.LastFrameAt,
 		&stream.CurrentViewers, &stream.TotalViewers, &stream.PeakViewers,
 		&stream.CreatedBy, &stream.CreatedAt, &stream.UpdatedAt,
 	)

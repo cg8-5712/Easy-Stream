@@ -53,9 +53,10 @@ type Stream struct {
 	StreamerContact    *string     `json:"streamer_contact" db:"streamer_contact"`         // 直播人员联系方式
 	ScheduledStartTime *time.Time  `json:"scheduled_start_time" db:"scheduled_start_time"` // 预计开始时间
 	ScheduledEndTime   *time.Time  `json:"scheduled_end_time" db:"scheduled_end_time"`     // 预计结束时间
-	AutoKickDelay      int         `json:"auto_kick_delay" db:"auto_kick_delay"`           // 超时自动断流延迟（分钟）
+	AutoKickDelay      int         `json:"auto_kick_delay" db:"auto_kick_delay"`           // 超过预计结束时间后，无推流多久自动结束（分钟）
 	ActualStartTime    *time.Time  `json:"actual_start_time" db:"actual_start_time"`       // 实际开始时间
 	ActualEndTime      *time.Time  `json:"actual_end_time" db:"actual_end_time"`           // 实际结束时间
+	LastUnpublishAt    *time.Time  `json:"last_unpublish_at" db:"last_unpublish_at"`       // 最后断流时间
 	LastFrameAt        *time.Time  `json:"last_frame_at" db:"last_frame_at"`
 	// 观看统计
 	CurrentViewers int   `json:"current_viewers" db:"current_viewers"` // 当前观看人数
@@ -91,7 +92,7 @@ type CreateStreamRequest struct {
 	StreamerContact    string     `json:"streamer_contact"`
 	ScheduledStartTime *time.Time `json:"scheduled_start_time" binding:"required"`
 	ScheduledEndTime   *time.Time `json:"scheduled_end_time" binding:"required"`
-	AutoKickDelay      int        `json:"auto_kick_delay"` // 默认30分钟
+	AutoKickDelay      int        `json:"auto_kick_delay"` // 超过预计结束时间后无推流多久自动结束，默认30分钟
 }
 
 // UpdateStreamRequest 更新推流请求

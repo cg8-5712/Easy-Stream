@@ -318,7 +318,7 @@ func (h *StreamHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 
-// Kick 强制断流（管理员）
+// Kick 强制断流（管理员）- 只断开推流，不结束直播
 func (h *StreamHandler) Kick(c *gin.Context) {
 	key := c.Param("key")
 	if err := h.streamSvc.Kick(key); err != nil {
@@ -329,5 +329,19 @@ func (h *StreamHandler) Kick(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "kicked"})
+	c.JSON(http.StatusOK, gin.H{"message": "stream disconnected, waiting for reconnect or auto-end"})
+}
+
+// End 手动结束直播（管理员）- 断流并标记为已结束
+func (h *StreamHandler) End(c *gin.Context) {
+	key := c.Param("key")
+	if err := h.streamSvc.End(key); err != nil {
+		if err == service.ErrStreamNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "stream ended"})
 }

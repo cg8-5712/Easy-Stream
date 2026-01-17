@@ -240,3 +240,49 @@ const (
 	RecordTypeHLS = 0 // HLS 录制
 	RecordTypeMP4 = 1 // MP4 录制
 )
+
+// SetServerConfig 设置服务器配置
+// 用于设置 hook URL 等配置项
+func (c *Client) SetServerConfig(configs map[string]string) (*CommonResponse, error) {
+	params := url.Values{}
+	params.Set("secret", c.secret)
+	for key, value := range configs {
+		params.Set(key, value)
+	}
+
+	resp, err := c.get("/index/api/setServerConfig", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var result CommonResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// ConfigureHooks 配置所有 hook URL
+// hookBaseURL 应该是 Easy-Stream 的回调地址，如 "http://easy-stream:8080/api/v1/hooks"
+func (c *Client) ConfigureHooks(hookBaseURL string) error {
+	configs := map[string]string{
+		"hook.enable":                 "1",
+		"hook.on_publish":             hookBaseURL + "/on_publish",
+		"hook.on_play":                hookBaseURL + "/on_play",
+		"hook.on_flow_report":         hookBaseURL + "/on_flow_report",
+		"hook.on_stream_none_reader":  hookBaseURL + "/on_stream_none_reader",
+		"hook.on_record_mp4":          hookBaseURL + "/on_record_mp4",
+	}
+
+	resp, err := c.SetServerConfig(configs)
+	if err != nil {
+		return fmt.Errorf("failed to set hook config: %w", err)
+	}
+
+	if resp.Code != 0 {
+		return fmt.Errorf("ZLMediaKit returned error code: %d", resp.Code)
+	}
+
+	return nil
+}

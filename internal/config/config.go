@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/spf13/viper"
 )
 
@@ -42,9 +44,10 @@ type JWTConfig struct {
 }
 
 type ZLMediaKitConfig struct {
-	Host   string
-	Port   string
-	Secret string
+	Host        string
+	Port        string
+	Secret      string
+	HookBaseURL string // Hook 回调基础 URL，如 http://localhost:8080/api/v1/hooks
 }
 
 type LogConfig struct {
@@ -95,6 +98,11 @@ func Load() (*Config, error) {
 
 	// 支持环境变量
 	viper.AutomaticEnv()
+	// 设置环境变量键替换（将 . 替换为 _）
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// 绑定关键环境变量
+	viper.BindEnv("zlmediakit.hookbaseurl", "ZLMEDIAKIT_HOOKBASEURL")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

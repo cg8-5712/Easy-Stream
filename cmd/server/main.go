@@ -10,6 +10,7 @@ import (
 	"easy-stream/internal/repository"
 	"easy-stream/internal/service"
 	"easy-stream/internal/storage"
+	"easy-stream/internal/zlm"
 	"easy-stream/pkg/logger"
 
 	"github.com/gin-gonic/gin"
@@ -69,6 +70,18 @@ func main() {
 
 	// 初始化系统服务
 	systemSvc := service.NewSystemService(db, rdb, cfg.ZLMediaKit)
+
+	// 配置 ZLMediaKit Hook 回调
+	if cfg.ZLMediaKit.HookBaseURL != "" {
+		zlmClient := zlm.NewClient(cfg.ZLMediaKit.Host, cfg.ZLMediaKit.Port, cfg.ZLMediaKit.Secret)
+		if err := zlmClient.ConfigureHooks(cfg.ZLMediaKit.HookBaseURL); err != nil {
+			log.Printf("Warning: Failed to configure ZLMediaKit hooks: %v", err)
+		} else {
+			log.Printf("ZLMediaKit hooks configured successfully: %s", cfg.ZLMediaKit.HookBaseURL)
+		}
+	} else {
+		log.Printf("Warning: zlmediakit.hookBaseURL not configured, hooks will not work")
+	}
 
 	// 初始化 Handler
 	streamHandler := handler.NewStreamHandler(streamSvc)
@@ -136,6 +149,7 @@ func main() {
 				admin.PUT("/:key", streamHandler.Update)
 				admin.DELETE("/:key", streamHandler.Delete)
 				admin.POST("/:key/kick", streamHandler.Kick)
+				admin.POST("/:key/end", streamHandler.End)
 
 				// 分享码管理
 				admin.POST("/:key/share-code", streamHandler.AddShareCode)              // 添加分享码

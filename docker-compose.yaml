@@ -24,6 +24,7 @@ services:
       - ZLMEDIAKIT_HOST=zlmediakit
       - ZLMEDIAKIT_PORT=80
       - ZLMEDIAKIT_SECRET=035c73f7-bb6b-4889-a715-d9eb2d1925cc
+      - ZLMEDIAKIT_HOOKBASEURL=http://easy-stream:8080/api/v1/hooks
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       # 本地存储路径（与 config.yaml 中 storage.targets[].localDir 对应）

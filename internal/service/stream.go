@@ -270,7 +270,7 @@ func (s *StreamService) Delete(key string) error {
 	return s.streamRepo.Delete(key)
 }
 
-// Kick 强制断流（管理员）
+// Kick 强制断流（管理员）- 只断开推流，不结束直播
 func (s *StreamService) Kick(key string) error {
 	stream, err := s.streamRepo.GetByKey(key)
 	if err != nil {
@@ -286,10 +286,66 @@ func (s *StreamService) Kick(key string) error {
 		return err
 	}
 
-	// 更新状态
+	// 状态改为 idle，记录断流时间（OnUnpublish 回调也会处理，这里是备份）
+	now := time.Now()
+	stream.LastUnpublishAt = &now
+	stream.Status = model.StreamStatusIdle
+	return s.streamRepo.Update(stream)
+}
+
+// End 手动结束直播（管理员）- 断流并标记为结束
+func (s *StreamService) End(key string) error {
+	stream, err := s.streamRepo.GetByKey(key)
+	if err != nil {
+		return err
+	}
+	if stream == nil {
+		return ErrStreamNotFound
+	}
+
+	// 如果正在推流，先断流
+	if stream.Status == model.StreamStatusPushing {
+		_, _ = s.zlmClient.CloseStreams("live", key, true)
+	}
+
+	// 执行结束流程
+	return s.endStreamInternal(stream)
+}
+
+// endStreamInternal 内部方法：执行结束直播的所有清理工作
+func (s *StreamService) endStreamInternal(stream *model.Stream) error {
+	streamKey := stream.StreamKey
+
+	// 清理 Redis 中的访问令牌（分享码和分享链接生成的令牌）
+	if err := s.redisRepo.DeleteStreamAccessTokens(streamKey); err != nil {
+		fmt.Printf("failed to delete access tokens for stream %s: %v\n", streamKey, err)
+	}
+
+	// 清理分享码
+	if stream.ShareCode != nil {
+		if err := s.streamRepo.DeleteShareCode(streamKey); err != nil {
+			fmt.Printf("failed to delete share code for stream %s: %v\n", streamKey, err)
+		}
+	}
+
+	// 清理分享链接
+	if err := s.shareLinkRepo.DeleteByStreamKey(streamKey); err != nil {
+		fmt.Printf("failed to delete share links for stream %s: %v\n", streamKey, err)
+	}
+
+	// 重置当前观看人数
+	s.streamRepo.ResetCurrentViewers(streamKey)
+
+	// 更新状态为已结束
 	now := time.Now()
 	stream.ActualEndTime = &now
-	return s.streamRepo.UpdateStatus(key, model.StreamStatusIdle)
+	stream.Status = model.StreamStatusEnded
+	stream.CurrentViewers = 0
+	stream.ShareCode = nil
+	stream.ShareCodeMaxUses = 0
+	stream.ShareCodeUsedCount = 0
+
+	return s.streamRepo.Update(stream)
 }
 
 // VerifyShareCode 验证分享码（游客）
@@ -476,34 +532,12 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 		}()
 	}
 
-	// 清理 Redis 中的访问令牌（分享码和分享链接生成的令牌）
-	if err := s.redisRepo.DeleteStreamAccessTokens(req.Stream); err != nil {
-		fmt.Printf("failed to delete access tokens for stream %s: %v\n", req.Stream, err)
-	}
-
-	// 清理分享码
-	if stream.ShareCode != nil {
-		if err := s.streamRepo.DeleteShareCode(req.Stream); err != nil {
-			fmt.Printf("failed to delete share code for stream %s: %v\n", req.Stream, err)
-		}
-	}
-
-	// 清理分享链接
-	if err := s.shareLinkRepo.DeleteByStreamKey(req.Stream); err != nil {
-		fmt.Printf("failed to delete share links for stream %s: %v\n", req.Stream, err)
-	}
-
-	// 重置当前观看人数
-	s.streamRepo.ResetCurrentViewers(req.Stream)
-
-	// 更新实际结束时间
+	// 记录断流时间，状态改为 idle（等待自动结束或重新推流）
 	now := time.Now()
-	stream.ActualEndTime = &now
-	stream.Status = model.StreamStatusEnded
+	stream.LastUnpublishAt = &now
+	stream.Status = model.StreamStatusIdle
 	stream.CurrentViewers = 0
-	stream.ShareCode = nil
-	stream.ShareCodeMaxUses = 0
-	stream.ShareCodeUsedCount = 0
+
 	return s.streamRepo.Update(stream)
 }
 
@@ -529,26 +563,28 @@ func (s *StreamService) OnFlowReport(req *model.OnFlowReportRequest) error {
 	return nil
 }
 
-// CheckExpiredStreams 检查并断开超时的直播（定时任务）
+// CheckExpiredStreams 检查并处理超时的直播（定时任务）
 func (s *StreamService) CheckExpiredStreams() error {
-	// 获取所有正在推流的流
-	streams, err := s.streamRepo.GetPushingStreams()
+	now := time.Now()
+
+	// 检查 idle 状态的流，超过预计结束时间 + auto_kick_delay 后自动结束
+	idleStreams, err := s.streamRepo.GetIdleStreams()
 	if err != nil {
 		return err
 	}
 
-	now := time.Now()
-	for _, stream := range streams {
+	for _, stream := range idleStreams {
 		if stream.ScheduledEndTime == nil {
 			continue
 		}
 
-		// 计算超时时间：预计结束时间 + 延迟时间
-		expireTime := stream.ScheduledEndTime.Add(time.Duration(stream.AutoKickDelay) * time.Minute)
+		// 计算自动结束时间：预计结束时间 + AutoKickDelay
+		autoEndTime := stream.ScheduledEndTime.Add(time.Duration(stream.AutoKickDelay) * time.Minute)
 
-		// 如果已超时，强制断流
-		if now.After(expireTime) {
-			s.Kick(stream.StreamKey)
+		// 如果已超时且没有在推流，自动结束直播
+		if now.After(autoEndTime) {
+			fmt.Printf("Auto ending stream %s (past scheduled end time + %d minutes without streaming)\n", stream.StreamKey, stream.AutoKickDelay)
+			s.endStreamInternal(stream)
 		}
 	}
 
