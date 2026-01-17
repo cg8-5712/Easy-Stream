@@ -1119,12 +1119,176 @@ GET /api/v1/system/health
 
 **无需认证**
 
+**功能说明**
+
+返回系统详细健康状态，包括：
+- 主应用状态（healthy/degraded/unhealthy）
+- PostgreSQL 数据库连接状态
+- Redis 连接状态
+- ZLMediaKit 流媒体服务器状态
+- 网络连接状态（DNS 和外网）
+
+**状态说明**
+
+| 总体状态 | 说明 |
+|---------|------|
+| healthy | 所有服务正常 |
+| degraded | 非关键服务异常（ZLMediaKit、网络） |
+| unhealthy | 关键服务异常（PostgreSQL、Redis） |
+
+| 服务状态 | 说明 |
+|---------|------|
+| up | 服务正常，连接和认证均成功 |
+| down | 服务不可用，无法连接 |
+| auth_failed | 认证失败，密码或密钥错误 |
+
 **响应示例** (200 OK)
 ```json
 {
-  "status": "ok"
+  "status": "healthy",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "uptime": "2h 30m 15s",
+  "version": "2.0",
+  "services": {
+    "postgresql": {
+      "status": "up",
+      "latency": "1.2ms"
+    },
+    "redis": {
+      "status": "up",
+      "latency": "0.5ms"
+    },
+    "zlmediakit": {
+      "status": "up",
+      "latency": "15.3ms"
+    }
+  },
+  "network": {
+    "dns": {
+      "status": "up",
+      "latency": "25ms"
+    },
+    "internet": {
+      "status": "up",
+      "latency": "120ms"
+    }
+  }
 }
 ```
+
+**降级响应示例** (200 OK)
+```json
+{
+  "status": "degraded",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "uptime": "2h 30m 15s",
+  "version": "2.0",
+  "services": {
+    "postgresql": {
+      "status": "up",
+      "latency": "1.2ms"
+    },
+    "redis": {
+      "status": "up",
+      "latency": "0.5ms"
+    },
+    "zlmediakit": {
+      "status": "down",
+      "latency": "5s",
+      "message": "connection failed: dial tcp 127.0.0.1:80: connect: connection refused"
+    }
+  },
+  "network": {
+    "dns": {
+      "status": "up",
+      "latency": "25ms"
+    },
+    "internet": {
+      "status": "up",
+      "latency": "120ms"
+    }
+  }
+}
+```
+
+**不可用响应示例** (503 Service Unavailable)
+```json
+{
+  "status": "unhealthy",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "uptime": "2h 30m 15s",
+  "version": "2.0",
+  "services": {
+    "postgresql": {
+      "status": "down",
+      "latency": "5s",
+      "message": "connection failed: dial tcp 127.0.0.1:5432: connect: connection refused"
+    },
+    "redis": {
+      "status": "up",
+      "latency": "0.5ms"
+    },
+    "zlmediakit": {
+      "status": "up",
+      "latency": "15.3ms"
+    }
+  },
+  "network": {
+    "dns": {
+      "status": "up",
+      "latency": "25ms"
+    },
+    "internet": {
+      "status": "up",
+      "latency": "120ms"
+    }
+  }
+}
+```
+
+**认证失败响应示例** (503 Service Unavailable)
+```json
+{
+  "status": "unhealthy",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "uptime": "2h 30m 15s",
+  "version": "2.0",
+  "services": {
+    "postgresql": {
+      "status": "up",
+      "latency": "1.2ms"
+    },
+    "redis": {
+      "status": "auth_failed",
+      "latency": "0.8ms",
+      "message": "authentication failed: invalid password"
+    },
+    "zlmediakit": {
+      "status": "auth_failed",
+      "latency": "10ms",
+      "message": "authentication failed: invalid secret"
+    }
+  },
+  "network": {
+    "dns": {
+      "status": "up",
+      "latency": "25ms"
+    },
+    "internet": {
+      "status": "up",
+      "latency": "120ms"
+    }
+  }
+}
+```
+
+**验证内容说明**
+
+| 服务 | 验证内容 |
+|------|---------|
+| PostgreSQL | 执行 `SELECT 1` 查询验证连接和用户名/密码 |
+| Redis | 执行 SET/GET/DEL 操作验证连接和密码 |
+| ZLMediaKit | 调用 `getServerConfig` API 验证连接和 Secret |
 
 ---
 

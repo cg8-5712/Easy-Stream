@@ -67,12 +67,15 @@ func main() {
 		}
 	}
 
+	// 初始化系统服务
+	systemSvc := service.NewSystemService(db, rdb, cfg.ZLMediaKit)
+
 	// 初始化 Handler
 	streamHandler := handler.NewStreamHandler(streamSvc)
 	shareLinkHandler := handler.NewShareLinkHandler(shareLinkSvc)
 	authHandler := handler.NewAuthHandler(authSvc)
 	hookHandler := handler.NewHookHandler(streamSvc, storageManager)
-	systemHandler := handler.NewSystemHandler()
+	systemHandler := handler.NewSystemHandler(systemSvc)
 
 	// 启动定时任务：检查超时直播
 	go func() {

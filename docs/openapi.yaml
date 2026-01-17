@@ -227,6 +227,69 @@ components:
           type: string
           description: 响应消息
 
+    HealthStatus:
+      type: object
+      description: 系统健康状态
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: |
+            总体健康状态：
+            - healthy: 所有服务正常
+            - degraded: 非关键服务异常
+            - unhealthy: 关键服务（PostgreSQL/Redis）异常
+        timestamp:
+          type: string
+          format: date-time
+          description: 检查时间
+        uptime:
+          type: string
+          description: 服务运行时间
+          example: "2h 30m 15s"
+        version:
+          type: string
+          description: 系统版本
+          example: "2.0"
+        services:
+          type: object
+          description: 各服务健康状态
+          properties:
+            postgresql:
+              $ref: '#/components/schemas/ServiceHealth'
+            redis:
+              $ref: '#/components/schemas/ServiceHealth'
+            zlmediakit:
+              $ref: '#/components/schemas/ServiceHealth'
+        network:
+          type: object
+          description: 网络状态
+          properties:
+            dns:
+              $ref: '#/components/schemas/ServiceHealth'
+            internet:
+              $ref: '#/components/schemas/ServiceHealth'
+
+    ServiceHealth:
+      type: object
+      description: 单个服务健康状态
+      properties:
+        status:
+          type: string
+          enum: [up, down, auth_failed]
+          description: |
+            服务状态：
+            - up: 服务正常
+            - down: 服务不可用
+            - auth_failed: 认证失败（密码/密钥错误）
+        latency:
+          type: string
+          description: 响应延迟
+          example: "1.5ms"
+        message:
+          type: string
+          description: 错误信息（仅当 status 不为 up 时）
+
 paths:
   # ==================== 认证接口 ====================
   /auth/login:
@@ -1287,18 +1350,27 @@ paths:
       tags:
         - 系统
       summary: 健康检查
+      description: |
+        返回系统详细健康状态，包括：
+        - 主应用状态（healthy/degraded/unhealthy）
+        - PostgreSQL 数据库连接状态
+        - Redis 连接状态
+        - ZLMediaKit 流媒体服务器状态
+        - 网络连接状态（DNS 和外网）
       operationId: healthCheck
       responses:
         '200':
-          description: 服务正常
+          description: 服务正常或降级
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: 服务不可用（关键服务故障）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
 
   /system/stats:
     get:
