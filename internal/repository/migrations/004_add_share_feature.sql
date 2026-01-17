@@ -15,7 +15,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_streams_share_code ON streams(share_code) 
 -- 创建分享链接表
 CREATE TABLE IF NOT EXISTS share_links (
     id SERIAL PRIMARY KEY,
-    stream_id INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+    stream_key VARCHAR(64) NOT NULL REFERENCES streams(stream_key) ON DELETE CASCADE,
     token VARCHAR(64) UNIQUE NOT NULL,
     max_uses INTEGER DEFAULT 0,
     used_count INTEGER DEFAULT 0,
@@ -24,5 +24,5 @@ CREATE TABLE IF NOT EXISTS share_links (
 );
 
 -- 创建索引
-CREATE INDEX IF NOT EXISTS idx_share_links_stream_id ON share_links(stream_id);
+CREATE INDEX IF NOT EXISTS idx_share_links_stream_key ON share_links(stream_key);
 CREATE INDEX IF NOT EXISTS idx_share_links_token ON share_links(token);

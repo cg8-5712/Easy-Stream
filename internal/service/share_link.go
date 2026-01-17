@@ -49,7 +49,7 @@ func (s *ShareLinkService) Create(streamKey string, req *model.CreateShareLinkRe
 	}
 
 	link := &model.ShareLink{
-		StreamID:  stream.ID,
+		StreamKey: streamKey,
 		Token:     token,
 		MaxUses:   req.MaxUses,
 		CreatedBy: userID,
@@ -78,7 +78,7 @@ func (s *ShareLinkService) List(streamKey string) (*model.ShareLinkListResponse,
 		return nil, ErrStreamNotFound
 	}
 
-	links, err := s.shareLinkRepo.ListByStreamID(stream.ID)
+	links, err := s.shareLinkRepo.ListByStreamKey(streamKey)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (s *ShareLinkService) VerifyToken(token string) (*model.StreamAccessToken, 
 	}
 
 	// 获取关联的直播
-	stream, err := s.streamRepo.GetByID(link.StreamID)
+	stream, err := s.streamRepo.GetByKey(link.StreamKey)
 	if err != nil {
 		return nil, err
 	}

@@ -18,24 +18,24 @@ func NewShareLinkRepository(db *sql.DB) *ShareLinkRepository {
 // Create 创建分享链接
 func (r *ShareLinkRepository) Create(link *model.ShareLink) error {
 	query := `
-		INSERT INTO share_links (stream_id, token, max_uses, used_count, created_by, created_at)
+		INSERT INTO share_links (stream_key, token, max_uses, used_count, created_by, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
 	return r.db.QueryRow(query,
-		link.StreamID, link.Token, link.MaxUses, 0, link.CreatedBy, time.Now(),
+		link.StreamKey, link.Token, link.MaxUses, 0, link.CreatedBy, time.Now(),
 	).Scan(&link.ID)
 }
 
 // GetByToken 根据 token 获取分享链接
 func (r *ShareLinkRepository) GetByToken(token string) (*model.ShareLink, error) {
 	query := `
-		SELECT id, stream_id, token, max_uses, used_count, created_by, created_at
+		SELECT id, stream_key, token, max_uses, used_count, created_by, created_at
 		FROM share_links WHERE token = $1
 	`
 	link := &model.ShareLink{}
 	err := r.db.QueryRow(query, token).Scan(
-		&link.ID, &link.StreamID, &link.Token,
+		&link.ID, &link.StreamKey, &link.Token,
 		&link.MaxUses, &link.UsedCount, &link.CreatedBy, &link.CreatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -47,12 +47,12 @@ func (r *ShareLinkRepository) GetByToken(token string) (*model.ShareLink, error)
 // GetByID 根据 ID 获取分享链接
 func (r *ShareLinkRepository) GetByID(id int64) (*model.ShareLink, error) {
 	query := `
-		SELECT id, stream_id, token, max_uses, used_count, created_by, created_at
+		SELECT id, stream_key, token, max_uses, used_count, created_by, created_at
 		FROM share_links WHERE id = $1
 	`
 	link := &model.ShareLink{}
 	err := r.db.QueryRow(query, id).Scan(
-		&link.ID, &link.StreamID, &link.Token,
+		&link.ID, &link.StreamKey, &link.Token,
 		&link.MaxUses, &link.UsedCount, &link.CreatedBy, &link.CreatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -61,13 +61,13 @@ func (r *ShareLinkRepository) GetByID(id int64) (*model.ShareLink, error) {
 	return link, err
 }
 
-// ListByStreamID 获取直播的所有分享链接
-func (r *ShareLinkRepository) ListByStreamID(streamID int64) ([]*model.ShareLink, error) {
+// ListByStreamKey 获取直播的所有分享链接
+func (r *ShareLinkRepository) ListByStreamKey(streamKey string) ([]*model.ShareLink, error) {
 	query := `
-		SELECT id, stream_id, token, max_uses, used_count, created_by, created_at
-		FROM share_links WHERE stream_id = $1 ORDER BY created_at DESC
+		SELECT id, stream_key, token, max_uses, used_count, created_by, created_at
+		FROM share_links WHERE stream_key = $1 ORDER BY created_at DESC
 	`
-	rows, err := r.db.Query(query, streamID)
+	rows, err := r.db.Query(query, streamKey)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (r *ShareLinkRepository) ListByStreamID(streamID int64) ([]*model.ShareLink
 	for rows.Next() {
 		link := &model.ShareLink{}
 		err := rows.Scan(
-			&link.ID, &link.StreamID, &link.Token,
+			&link.ID, &link.StreamKey, &link.Token,
 			&link.MaxUses, &link.UsedCount, &link.CreatedBy, &link.CreatedAt,
 		)
 		if err != nil {
@@ -108,8 +108,8 @@ func (r *ShareLinkRepository) Delete(id int64) error {
 	return err
 }
 
-// DeleteByStreamID 删除直播的所有分享链接
-func (r *ShareLinkRepository) DeleteByStreamID(streamID int64) error {
-	_, err := r.db.Exec("DELETE FROM share_links WHERE stream_id = $1", streamID)
+// DeleteByStreamKey 删除直播的所有分享链接
+func (r *ShareLinkRepository) DeleteByStreamKey(streamKey string) error {
+	_, err := r.db.Exec("DELETE FROM share_links WHERE stream_key = $1", streamKey)
 	return err
 }

@@ -78,7 +78,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_streams_share_code ON streams(share_code) 
 -- 创建分享链接表
 CREATE TABLE IF NOT EXISTS share_links (
     id              SERIAL PRIMARY KEY,
-    stream_id       INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+    stream_key      VARCHAR(64) NOT NULL REFERENCES streams(stream_key) ON DELETE CASCADE,
     token           VARCHAR(64) UNIQUE NOT NULL,
     max_uses        INTEGER DEFAULT 0,
     used_count      INTEGER DEFAULT 0,
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS share_links (
     created_at      TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_share_links_stream_id ON share_links(stream_id);
+CREATE INDEX IF NOT EXISTS idx_share_links_stream_key ON share_links(stream_key);
 CREATE INDEX IF NOT EXISTS idx_share_links_token ON share_links(token);
 
 -- 创建操作日志表
@@ -157,7 +157,7 @@ COMMENT ON COLUMN streams.created_by IS '创建者用户ID';
 
 COMMENT ON TABLE share_links IS '分享链接表';
 COMMENT ON COLUMN share_links.id IS '链接ID';
-COMMENT ON COLUMN share_links.stream_id IS '关联的直播ID';
+COMMENT ON COLUMN share_links.stream_key IS '关联的直播stream_key';
 COMMENT ON COLUMN share_links.token IS '分享链接token';
 COMMENT ON COLUMN share_links.max_uses IS '最大使用次数（0表示无限制）';
 COMMENT ON COLUMN share_links.used_count IS '已使用次数';

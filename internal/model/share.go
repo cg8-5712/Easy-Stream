@@ -5,7 +5,7 @@ import "time"
 // ShareLink 分享链接
 type ShareLink struct {
 	ID        int64     `json:"id" db:"id"`
-	StreamID  int64     `json:"stream_id" db:"stream_id"`
+	StreamKey string    `json:"stream_key" db:"stream_key"`
 	Token     string    `json:"token" db:"token"`
 	MaxUses   int       `json:"max_uses" db:"max_uses"`     // 最大使用次数（0表示无限制）
 	UsedCount int       `json:"used_count" db:"used_count"` // 已使用次数
