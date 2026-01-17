@@ -106,7 +106,7 @@ func (s *StreamService) Get(key string, isLoggedIn bool, accessToken string) (*m
 }
 
 // List 获取推流列表（游客只能看公开且正在直播的，管理员能看所有）
-func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool) (*model.StreamListResponse, error) {
+func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool, accessToken string) (*model.StreamListResponse, error) {
 	if req.Page < 1 {
 		req.Page = 1
 	}
@@ -127,6 +127,30 @@ func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool) (*mo
 		return nil, err
 	}
 
+	// 如果游客传入了 access_token，尝试获取对应的私有直播
+	if !isLoggedIn && accessToken != "" {
+		streamKey, err := s.redisRepo.GetStreamKeyByAccessToken(accessToken)
+		if err == nil && streamKey != "" {
+			// 获取对应的私有直播
+			privateStream, err := s.streamRepo.GetByKey(streamKey)
+			if err == nil && privateStream != nil && privateStream.Status == model.StreamStatusPushing {
+				// 检查是否已经在列表中（理论上不会，因为私有直播不会出现在公开列表中）
+				found := false
+				for _, stream := range streams {
+					if stream.ID == privateStream.ID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					// 将私有直播添加到列表开头
+					streams = append([]*model.Stream{privateStream}, streams...)
+					total++
+				}
+			}
+		}
+	}
+
 	return &model.StreamListResponse{
 		Total:   total,
 		Streams: streams,
@@ -143,6 +167,11 @@ func (s *StreamService) GetByID(id int64) (*model.Stream, error) {
 		return nil, ErrStreamNotFound
 	}
 	return stream, nil
+}
+
+// VerifyAccessToken 验证访问令牌
+func (s *StreamService) VerifyAccessToken(streamKey, accessToken string) (bool, error) {
+	return s.redisRepo.VerifyStreamAccessToken(streamKey, accessToken)
 }
 
 // Update 更新推流信息（管理员）
@@ -290,7 +319,7 @@ func (s *StreamService) VerifyShareCode(shareCode string) (*model.StreamAccessTo
 	}
 
 	return &model.StreamAccessToken{
-		StreamKey: stream.StreamKey,
+		StreamID:  stream.ID,
 		Token:     token,
 		ExpiresAt: expiresAt,
 	}, nil

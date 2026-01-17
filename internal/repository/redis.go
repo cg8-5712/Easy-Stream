@@ -104,3 +104,28 @@ func (r *RedisClient) DeleteStreamAccessTokens(streamKey string) error {
 	return nil
 }
 
+// GetStreamKeyByAccessToken 通过访问令牌获取 stream_key
+func (r *RedisClient) GetStreamKeyByAccessToken(token string) (string, error) {
+	ctx := context.Background()
+	pattern := fmt.Sprintf("stream_access:*:%s", token)
+
+	keys, _, err := r.Scan(ctx, 0, pattern, 10).Result()
+	if err != nil {
+		return "", err
+	}
+
+	if len(keys) == 0 {
+		return "", nil
+	}
+
+	// 从 key 中提取 stream_key，格式: stream_access:{streamKey}:{token}
+	key := keys[0]
+	// 去掉前缀 "stream_access:" 和后缀 ":{token}"
+	prefix := "stream_access:"
+	suffix := ":" + token
+	if len(key) > len(prefix)+len(suffix) {
+		return key[len(prefix) : len(key)-len(suffix)], nil
+	}
+	return "", nil
+}
+

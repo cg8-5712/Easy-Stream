@@ -132,7 +132,73 @@ const (
 
 // StreamAccessToken 直播访问令牌（用于私有直播）
 type StreamAccessToken struct {
-	StreamKey string    `json:"stream_key"`
+	StreamID  int64     `json:"stream_id"`
 	Token     string    `json:"access_token"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// StreamPublicView 游客可见的直播信息（不含 stream_key）
+type StreamPublicView struct {
+	ID                 int64       `json:"id"`
+	Name               string      `json:"name"`
+	Description        *string     `json:"description"`
+	DeviceID           *string     `json:"device_id"`
+	Status             string      `json:"status"`
+	Visibility         string      `json:"visibility"`
+	RecordEnabled      bool        `json:"record_enabled"`
+	RecordFiles        StringArray `json:"record_files"`
+	Protocol           *string     `json:"protocol"`
+	Bitrate            *int        `json:"bitrate"`
+	FPS                *int        `json:"fps"`
+	StreamerName       *string     `json:"streamer_name"`
+	StreamerContact    *string     `json:"streamer_contact"`
+	ScheduledStartTime *time.Time  `json:"scheduled_start_time"`
+	ScheduledEndTime   *time.Time  `json:"scheduled_end_time"`
+	AutoKickDelay      int         `json:"auto_kick_delay"`
+	ActualStartTime    *time.Time  `json:"actual_start_time"`
+	ActualEndTime      *time.Time  `json:"actual_end_time"`
+	LastFrameAt        *time.Time  `json:"last_frame_at"`
+	CurrentViewers     int         `json:"current_viewers"`
+	TotalViewers       int         `json:"total_viewers"`
+	PeakViewers        int         `json:"peak_viewers"`
+	CreatedBy          int64       `json:"created_by"`
+	CreatedAt          time.Time   `json:"created_at"`
+	UpdatedAt          time.Time   `json:"updated_at"`
+}
+
+// ToPublicView 将 Stream 转换为 StreamPublicView（游客视图）
+func (s *Stream) ToPublicView() *StreamPublicView {
+	return &StreamPublicView{
+		ID:                 s.ID,
+		Name:               s.Name,
+		Description:        s.Description,
+		DeviceID:           s.DeviceID,
+		Status:             s.Status,
+		Visibility:         s.Visibility,
+		RecordEnabled:      s.RecordEnabled,
+		RecordFiles:        s.RecordFiles,
+		Protocol:           s.Protocol,
+		Bitrate:            s.Bitrate,
+		FPS:                s.FPS,
+		StreamerName:       s.StreamerName,
+		StreamerContact:    s.StreamerContact,
+		ScheduledStartTime: s.ScheduledStartTime,
+		ScheduledEndTime:   s.ScheduledEndTime,
+		AutoKickDelay:      s.AutoKickDelay,
+		ActualStartTime:    s.ActualStartTime,
+		ActualEndTime:      s.ActualEndTime,
+		LastFrameAt:        s.LastFrameAt,
+		CurrentViewers:     s.CurrentViewers,
+		TotalViewers:       s.TotalViewers,
+		PeakViewers:        s.PeakViewers,
+		CreatedBy:          s.CreatedBy,
+		CreatedAt:          s.CreatedAt,
+		UpdatedAt:          s.UpdatedAt,
+	}
+}
+
+// StreamPublicListResponse 游客推流列表响应
+type StreamPublicListResponse struct {
+	Total   int64               `json:"total"`
+	Streams []*StreamPublicView `json:"streams"`
 }

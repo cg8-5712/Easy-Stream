@@ -23,6 +23,7 @@ func (h *StreamHandler) List(c *gin.Context) {
 	status := c.Query("status")
 	visibility := c.Query("visibility")
 	timeRange := c.Query("time_range")
+	accessToken := c.Query("access_token")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
@@ -37,11 +38,25 @@ func (h *StreamHandler) List(c *gin.Context) {
 		PageSize:   pageSize,
 	}
 
-	resp, err := h.streamSvc.List(req, isLoggedIn)
+	resp, err := h.streamSvc.List(req, isLoggedIn, accessToken)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// 游客返回不含 stream_key 的视图
+	if !isLoggedIn {
+		publicResp := &model.StreamPublicListResponse{
+			Total:   resp.Total,
+			Streams: make([]*model.StreamPublicView, len(resp.Streams)),
+		}
+		for i, stream := range resp.Streams {
+			publicResp.Streams[i] = stream.ToPublicView()
+		}
+		c.JSON(http.StatusOK, publicResp)
+		return
+	}
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -62,22 +77,21 @@ func (h *StreamHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, stream)
 }
 
-// Get 获取推流详情（支持游客和管理员）
+// Get 获取推流详情（仅管理员通过 key 访问）
 func (h *StreamHandler) Get(c *gin.Context) {
 	key := c.Param("key")
-	accessToken := c.Query("access_token")
 
-	// 检查用户是否已登录
+	// 检查用户是否已登录（此接口仅管理员可用）
 	_, isLoggedIn := c.Get("user_id")
+	if !isLoggedIn {
+		c.JSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+		return
+	}
 
-	stream, err := h.streamSvc.Get(key, isLoggedIn, accessToken)
+	stream, err := h.streamSvc.Get(key, true, "")
 	if err != nil {
 		if err == service.ErrStreamNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
-			return
-		}
-		if err == service.ErrPrivateStream {
-			c.JSON(http.StatusForbidden, gin.H{"error": "private stream requires authentication"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -105,6 +119,54 @@ func (h *StreamHandler) GetByID(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, stream)
+}
+
+// GetByIDPublic 通过 ID 获取推流详情（游客，不含 stream_key）
+func (h *StreamHandler) GetByIDPublic(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	accessToken := c.Query("access_token")
+
+	// 检查用户是否已登录
+	_, isLoggedIn := c.Get("user_id")
+
+	stream, err := h.streamSvc.GetByID(id)
+	if err != nil {
+		if err == service.ErrStreamNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 管理员返回完整信息
+	if isLoggedIn {
+		c.JSON(http.StatusOK, stream)
+		return
+	}
+
+	// 游客访问：公开直播可以直接看，私有直播需要 access_token
+	if stream.Visibility == model.StreamVisibilityPrivate {
+		if accessToken == "" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "private stream requires access token"})
+			return
+		}
+		// 验证 access_token
+		valid, err := h.streamSvc.VerifyAccessToken(stream.StreamKey, accessToken)
+		if err != nil || !valid {
+			c.JSON(http.StatusForbidden, gin.H{"error": "invalid access token"})
+			return
+		}
+	}
+
+	// 游客返回不含 stream_key 的视图
+	c.JSON(http.StatusOK, stream.ToPublicView())
 }
 
 // VerifyShareCode 验证分享码（游客）

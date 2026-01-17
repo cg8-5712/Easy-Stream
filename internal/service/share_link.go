@@ -135,7 +135,7 @@ func (s *ShareLinkService) VerifyToken(token string) (*model.StreamAccessToken, 
 	}
 
 	return &model.StreamAccessToken{
-		StreamKey: stream.StreamKey,
+		StreamID:  stream.ID,
 		Token:     accessToken,
 		ExpiresAt: expiresAt,
 	}, nil

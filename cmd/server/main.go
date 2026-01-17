@@ -118,14 +118,16 @@ func main() {
 		{
 			// 游客可访问（公开直播列表），管理员可获取所有内容
 			streams.GET("", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.List)
-			streams.GET("/:key", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.Get)
+			// 游客通过 ID 查看直播（不含 stream_key）
+			streams.GET("/view/:id", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.GetByIDPublic)
 
 			// 管理员接口（需要认证）
 			admin := streams.Group("")
 			admin.Use(middleware.Auth(cfg.JWT.Secret))
 			{
 				admin.POST("", streamHandler.Create)
-				admin.GET("/id/:id", streamHandler.GetByID) // 通过 ID 获取
+				admin.GET("/id/:id", streamHandler.GetByID)   // 管理员通过 ID 获取（含 key）
+				admin.GET("/:key", streamHandler.Get)         // 管理员通过 key 获取
 				admin.PUT("/:key", streamHandler.Update)
 				admin.DELETE("/:key", streamHandler.Delete)
 				admin.POST("/:key/kick", streamHandler.Kick)
