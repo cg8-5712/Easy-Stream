@@ -127,8 +127,8 @@ func main() {
 		// 分享接口（游客）
 		shares := api.Group("/shares")
 		{
-			shares.POST("/verify-code", streamHandler.VerifyShareCode)  // 验证分享码
-			shares.GET("/link/:token", shareLinkHandler.Verify)         // 验证分享链接
+			shares.POST("/verify-code", streamHandler.VerifyShareCode) // 验证分享码
+			shares.GET("/link/:token", shareLinkHandler.Verify)        // 验证分享链接
 		}
 
 		// 推流管理接口
@@ -138,30 +138,33 @@ func main() {
 			streams.GET("", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.List)
 			// 游客通过 ID 查看直播（不含 stream_key）
 			streams.GET("/view/:id", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.GetByIDPublic)
+			// WebRTC 播放接口（游客和管理员都可以使用）
+			streams.POST("/webrtc/:id", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.WebRTCPlay)
+			streams.GET("/webrtc/:id", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.GetWebRTCSDP)
 
 			// 管理员接口（需要认证）
 			admin := streams.Group("")
 			admin.Use(middleware.Auth(cfg.JWT.Secret))
 			{
 				admin.POST("", streamHandler.Create)
-				admin.GET("/id/:id", streamHandler.GetByID)   // 管理员通过 ID 获取（含 key）
-				admin.GET("/:key", streamHandler.Get)         // 管理员通过 key 获取
+				admin.GET("/id/:id", streamHandler.GetByID) // 管理员通过 ID 获取（含 key）
+				admin.GET("/:key", streamHandler.Get)       // 管理员通过 key 获取
 				admin.PUT("/:key", streamHandler.Update)
 				admin.DELETE("/:key", streamHandler.Delete)
 				admin.POST("/:key/kick", streamHandler.Kick)
 				admin.POST("/:key/end", streamHandler.End)
 
 				// 分享码管理
-				admin.POST("/:key/share-code", streamHandler.AddShareCode)              // 添加分享码
-				admin.PUT("/:key/share-code", streamHandler.RegenerateShareCode)        // 重新生成分享码
-				admin.PATCH("/:key/share-code", streamHandler.UpdateShareCodeMaxUses)   // 更新分享码使用次数
-				admin.DELETE("/:key/share-code", streamHandler.DeleteShareCode)         // 删除分享码
+				admin.POST("/:key/share-code", streamHandler.AddShareCode)            // 添加分享码
+				admin.PUT("/:key/share-code", streamHandler.RegenerateShareCode)      // 重新生成分享码
+				admin.PATCH("/:key/share-code", streamHandler.UpdateShareCodeMaxUses) // 更新分享码使用次数
+				admin.DELETE("/:key/share-code", streamHandler.DeleteShareCode)       // 删除分享码
 
 				// 分享链接管理
-				admin.POST("/:key/share-links", shareLinkHandler.Create)                // 创建分享链接
-				admin.GET("/:key/share-links", shareLinkHandler.List)                   // 获取分享链接列表
-				admin.PATCH("/share-links/:id", shareLinkHandler.UpdateMaxUses)         // 更新分享链接使用次数
-				admin.DELETE("/share-links/:id", shareLinkHandler.Delete)               // 删除分享链接
+				admin.POST("/:key/share-links", shareLinkHandler.Create)        // 创建分享链接
+				admin.GET("/:key/share-links", shareLinkHandler.List)           // 获取分享链接列表
+				admin.PATCH("/share-links/:id", shareLinkHandler.UpdateMaxUses) // 更新分享链接使用次数
+				admin.DELETE("/share-links/:id", shareLinkHandler.Delete)       // 删除分享链接
 			}
 		}
 
