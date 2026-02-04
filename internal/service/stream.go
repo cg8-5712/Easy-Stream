@@ -52,7 +52,8 @@ func (s *StreamService) Create(req *model.CreateStreamRequest, userID int64) (*m
 		Status:             model.StreamStatusIdle,
 		Visibility:         req.Visibility,
 		RecordEnabled:      req.RecordEnabled,
-		RecordFiles:        model.StringArray{},
+		RecordStatus:       model.RecordStatusIdle,
+		RecordFiles:        model.RecordFileArray{},
 		StreamerName:       strPtr(req.StreamerName),
 		StreamerContact:    strPtr(req.StreamerContact),
 		ScheduledStartTime: req.ScheduledStartTime,
@@ -505,9 +506,14 @@ func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 
 	// 如果开启了录制，自动开始录制
 	if stream.RecordEnabled {
+		// 更新录制状态为 recording
+		s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusRecording)
+
 		go func() {
 			if _, err := s.zlmClient.StartRecord("live", req.Stream, zlm.RecordTypeMP4, ""); err != nil {
 				fmt.Printf("failed to start record for stream %s: %v\n", req.Stream, err)
+				// 录制失败，更新状态为 failed
+				s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
 			}
 		}()
 	}
@@ -526,7 +532,10 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 	}
 
 	// 如果开启了录制，停止录制
-	if stream.RecordEnabled {
+	if stream.RecordEnabled && stream.RecordStatus == model.RecordStatusRecording {
+		// 更新录制状态为 stopped
+		s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusStopped)
+
 		go func() {
 			if _, err := s.zlmClient.StopRecord("live", req.Stream, zlm.RecordTypeMP4); err != nil {
 				fmt.Printf("failed to stop record for stream %s: %v\n", req.Stream, err)
@@ -593,9 +602,14 @@ func (s *StreamService) CheckExpiredStreams() error {
 	return nil
 }
 
-// AddRecordFile 添加录制文件路径
-func (s *StreamService) AddRecordFile(streamKey, filePath string) error {
-	return s.streamRepo.AppendRecordFile(streamKey, filePath)
+// AddRecordFile 添加录制文件（包含完整元数据）
+func (s *StreamService) AddRecordFile(streamKey string, recordFile *model.RecordFile) error {
+	return s.streamRepo.AppendRecordFile(streamKey, recordFile)
+}
+
+// UpdateRecordStatus 更新录制状态
+func (s *StreamService) UpdateRecordStatus(streamKey, status string) error {
+	return s.streamRepo.UpdateRecordStatus(streamKey, status)
 }
 
 // generateShareCode 生成6位分享码

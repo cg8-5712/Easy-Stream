@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -23,11 +24,11 @@ func (r *StreamRepository) Create(stream *model.Stream) error {
 		INSERT INTO streams (
 			stream_key, name, description, device_id, status, visibility,
 			share_code, share_code_max_uses, share_code_used_count,
-			record_enabled, record_files,
+			record_enabled, record_status, record_files,
 			streamer_name, streamer_contact, scheduled_start_time, scheduled_end_time,
 			auto_kick_delay, created_by, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		RETURNING id
 	`
 	now := time.Now()
@@ -36,7 +37,7 @@ func (r *StreamRepository) Create(stream *model.Stream) error {
 		stream.StreamKey, stream.Name, stream.Description, stream.DeviceID,
 		stream.Status, stream.Visibility,
 		stream.ShareCode, stream.ShareCodeMaxUses, stream.ShareCodeUsedCount,
-		stream.RecordEnabled, recordFiles,
+		stream.RecordEnabled, stream.RecordStatus, recordFiles,
 		stream.StreamerName, stream.StreamerContact,
 		stream.ScheduledStartTime, stream.ScheduledEndTime,
 		stream.AutoKickDelay, stream.CreatedBy, now, now,
@@ -48,7 +49,7 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 	query := `
 		SELECT id, stream_key, name, description, device_id, status, visibility,
 			   share_code, share_code_max_uses, share_code_used_count,
-			   record_enabled, record_files,
+			   record_enabled, record_status, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
@@ -62,7 +63,7 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 		&stream.ID, &stream.StreamKey, &stream.Name, &stream.Description,
 		&stream.DeviceID, &stream.Status, &stream.Visibility,
 		&stream.ShareCode, &stream.ShareCodeMaxUses, &stream.ShareCodeUsedCount,
-		&stream.RecordEnabled, &stream.RecordFiles,
+		&stream.RecordEnabled, &stream.RecordStatus, &stream.RecordFiles,
 		&stream.Protocol, &stream.Bitrate, &stream.FPS,
 		&stream.StreamerName, &stream.StreamerContact,
 		&stream.ScheduledStartTime, &stream.ScheduledEndTime, &stream.AutoKickDelay,
@@ -81,7 +82,7 @@ func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 	query := `
 		SELECT id, stream_key, name, description, device_id, status, visibility,
 			   share_code, share_code_max_uses, share_code_used_count,
-			   record_enabled, record_files,
+			   record_enabled, record_status, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
@@ -95,7 +96,7 @@ func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 		&stream.ID, &stream.StreamKey, &stream.Name, &stream.Description,
 		&stream.DeviceID, &stream.Status, &stream.Visibility,
 		&stream.ShareCode, &stream.ShareCodeMaxUses, &stream.ShareCodeUsedCount,
-		&stream.RecordEnabled, &stream.RecordFiles,
+		&stream.RecordEnabled, &stream.RecordStatus, &stream.RecordFiles,
 		&stream.Protocol, &stream.Bitrate, &stream.FPS,
 		&stream.StreamerName, &stream.StreamerContact,
 		&stream.ScheduledStartTime, &stream.ScheduledEndTime, &stream.AutoKickDelay,
@@ -165,7 +166,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 	query := `
 		SELECT id, stream_key, name, description, device_id, status, visibility,
 			   share_code, share_code_max_uses, share_code_used_count,
-			   record_enabled, record_files,
+			   record_enabled, record_status, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
@@ -188,7 +189,7 @@ func (r *StreamRepository) List(req *model.StreamListRequest, offset, limit int)
 			&s.ID, &s.StreamKey, &s.Name, &s.Description,
 			&s.DeviceID, &s.Status, &s.Visibility,
 			&s.ShareCode, &s.ShareCodeMaxUses, &s.ShareCodeUsedCount,
-			&s.RecordEnabled, &s.RecordFiles,
+			&s.RecordEnabled, &s.RecordStatus, &s.RecordFiles,
 			&s.Protocol, &s.Bitrate, &s.FPS,
 			&s.StreamerName, &s.StreamerContact,
 			&s.ScheduledStartTime, &s.ScheduledEndTime, &s.AutoKickDelay,
@@ -210,21 +211,21 @@ func (r *StreamRepository) Update(stream *model.Stream) error {
 		UPDATE streams SET
 			name=$1, description=$2, device_id=$3, status=$4, visibility=$5,
 			share_code=$6, share_code_max_uses=$7, share_code_used_count=$8,
-			record_enabled=$9, record_files=$10,
-			protocol=$11, bitrate=$12, fps=$13,
-			streamer_name=$14, streamer_contact=$15,
-			scheduled_start_time=$16, scheduled_end_time=$17, auto_kick_delay=$18,
-			actual_start_time=$19, actual_end_time=$20, last_unpublish_at=$21, last_frame_at=$22,
-			current_viewers=$23, total_viewers=$24, peak_viewers=$25,
-			updated_at=$26
-		WHERE stream_key=$27
+			record_enabled=$9, record_status=$10, record_files=$11,
+			protocol=$12, bitrate=$13, fps=$14,
+			streamer_name=$15, streamer_contact=$16,
+			scheduled_start_time=$17, scheduled_end_time=$18, auto_kick_delay=$19,
+			actual_start_time=$20, actual_end_time=$21, last_unpublish_at=$22, last_frame_at=$23,
+			current_viewers=$24, total_viewers=$25, peak_viewers=$26,
+			updated_at=$27
+		WHERE stream_key=$28
 	`
 	recordFiles, _ := stream.RecordFiles.Value()
 	_, err := r.db.Exec(query,
 		stream.Name, stream.Description, stream.DeviceID, stream.Status,
 		stream.Visibility,
 		stream.ShareCode, stream.ShareCodeMaxUses, stream.ShareCodeUsedCount,
-		stream.RecordEnabled, recordFiles,
+		stream.RecordEnabled, stream.RecordStatus, recordFiles,
 		stream.Protocol, stream.Bitrate, stream.FPS,
 		stream.StreamerName, stream.StreamerContact,
 		stream.ScheduledStartTime, stream.ScheduledEndTime, stream.AutoKickDelay,
@@ -242,22 +243,32 @@ func (r *StreamRepository) UpdateStatus(key, status string) error {
 	return err
 }
 
-// AppendRecordFile 追加录制文件路径
-func (r *StreamRepository) AppendRecordFile(key, filePath string) error {
+// AppendRecordFile 追加录制文件（包含完整元数据）
+func (r *StreamRepository) AppendRecordFile(key string, recordFile *model.RecordFile) error {
 	query := `
 		UPDATE streams
 		SET record_files = record_files || $1::jsonb, updated_at = $2
 		WHERE stream_key = $3
 	`
-	fileJSON := fmt.Sprintf(`["%s"]`, filePath)
-	_, err := r.db.Exec(query, fileJSON, time.Now(), key)
+	fileJSON, err := json.Marshal([]model.RecordFile{*recordFile})
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(query, fileJSON, time.Now(), key)
 	return err
 }
 
-// UpdateRecordEnabled 更新录制状态
+// UpdateRecordEnabled 更新录制开关
 func (r *StreamRepository) UpdateRecordEnabled(key string, enabled bool) error {
 	query := `UPDATE streams SET record_enabled=$1, updated_at=$2 WHERE stream_key=$3`
 	_, err := r.db.Exec(query, enabled, time.Now(), key)
+	return err
+}
+
+// UpdateRecordStatus 更新录制状态
+func (r *StreamRepository) UpdateRecordStatus(key, status string) error {
+	query := `UPDATE streams SET record_status=$1, updated_at=$2 WHERE stream_key=$3`
+	_, err := r.db.Exec(query, status, time.Now(), key)
 	return err
 }
 
@@ -266,7 +277,7 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 	query := `
 		SELECT id, stream_key, name, description, device_id, status, visibility,
 			   share_code, share_code_max_uses, share_code_used_count,
-			   record_enabled, record_files,
+			   record_enabled, record_status, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
@@ -287,7 +298,7 @@ func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 			&s.ID, &s.StreamKey, &s.Name, &s.Description,
 			&s.DeviceID, &s.Status, &s.Visibility,
 			&s.ShareCode, &s.ShareCodeMaxUses, &s.ShareCodeUsedCount,
-			&s.RecordEnabled, &s.RecordFiles,
+			&s.RecordEnabled, &s.RecordStatus, &s.RecordFiles,
 			&s.Protocol, &s.Bitrate, &s.FPS,
 			&s.StreamerName, &s.StreamerContact,
 			&s.ScheduledStartTime, &s.ScheduledEndTime, &s.AutoKickDelay,
@@ -308,7 +319,7 @@ func (r *StreamRepository) GetIdleStreams() ([]*model.Stream, error) {
 	query := `
 		SELECT id, stream_key, name, description, device_id, status, visibility,
 			   share_code, share_code_max_uses, share_code_used_count,
-			   record_enabled, record_files,
+			   record_enabled, record_status, record_files,
 			   protocol, bitrate, fps, streamer_name, streamer_contact,
 			   scheduled_start_time, scheduled_end_time, auto_kick_delay,
 			   actual_start_time, actual_end_time, last_unpublish_at, last_frame_at,
@@ -329,7 +340,7 @@ func (r *StreamRepository) GetIdleStreams() ([]*model.Stream, error) {
 			&s.ID, &s.StreamKey, &s.Name, &s.Description,
 			&s.DeviceID, &s.Status, &s.Visibility,
 			&s.ShareCode, &s.ShareCodeMaxUses, &s.ShareCodeUsedCount,
-			&s.RecordEnabled, &s.RecordFiles,
+			&s.RecordEnabled, &s.RecordStatus, &s.RecordFiles,
 			&s.Protocol, &s.Bitrate, &s.FPS,
 			&s.StreamerName, &s.StreamerContact,
 			&s.ScheduledStartTime, &s.ScheduledEndTime, &s.AutoKickDelay,

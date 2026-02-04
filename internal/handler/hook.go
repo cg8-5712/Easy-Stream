@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"easy-stream/internal/model"
 	"easy-stream/internal/service"
@@ -117,8 +118,20 @@ func (h *HookHandler) OnRecordMP4(c *gin.Context) {
 		return
 	}
 
+	// 构建录制文件元数据
+	recordFile := &model.RecordFile{
+		FileName:  req.FileName,
+		FilePath:  req.FilePath,
+		FileSize:  req.FileSize,
+		Duration:  req.TimeLen,
+		StartTime: req.StartTime,
+		TimeLen:   req.TimeLen,
+		CreatedAt: time.Now(),
+		URLs:      make(map[string]string),
+	}
+
 	// 记录录制文件到数据库
-	if err := h.streamSvc.AddRecordFile(req.Stream, req.FilePath); err != nil {
+	if err := h.streamSvc.AddRecordFile(req.Stream, recordFile); err != nil {
 		c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: err.Error()})
 		return
 	}
@@ -127,7 +140,11 @@ func (h *HookHandler) OnRecordMP4(c *gin.Context) {
 	if h.storageManager != nil && h.storageManager.HasStorages() {
 		go func() {
 			remotePath := req.FileName
-			h.storageManager.UploadToAll(c.Request.Context(), req.FilePath, remotePath)
+			urls := h.storageManager.UploadToAll(c.Request.Context(), req.FilePath, remotePath)
+
+			// 更新录制文件的存储 URLs（这里简化处理，实际应该更新数据库）
+			// TODO: 添加方法更新录制文件的 URLs
+			_ = urls
 		}()
 	}
 

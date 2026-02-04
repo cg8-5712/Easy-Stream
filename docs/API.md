@@ -1475,8 +1475,9 @@ POST /api/v1/hooks/on_player_disconnect
   share_code_max_uses: number   // 分享码最大使用次数（0表示不限制）
   share_code_used_count: number // 分享码已使用次数
   record_enabled: boolean       // 是否开启录制
-  record_files: string[]        // 录制文件路径列表（多次开关录制会生成多个文件）
-  protocol: string              // 协议: rtmp / rtsp / srt
+  record_status: string         // 录制状态: idle / recording / stopped / failed
+  record_files: RecordFile[]    // 录制文件列表（包含完整元数据）
+  protocol: string              // 协议: rtmp / rtsp / srt / webrtc
   bitrate: number               // 码率 (kbps)
   fps: number                   // 帧率
   streamer_name: string         // 直播人员姓名
@@ -1496,6 +1497,64 @@ POST /api/v1/hooks/on_player_disconnect
   updated_at: string            // 更新时间
 }
 ```
+
+### RecordFile (录制文件)
+
+```typescript
+{
+  file_name: string             // 文件名
+  file_path: string             // 文件路径
+  file_size: number             // 文件大小（字节）
+  duration: number              // 录制时长（秒）
+  start_time: number            // 录制开始时间戳
+  time_len: number              // 录制时长（秒，ZLM 返回）
+  created_at: string            // 文件创建时间
+  urls: {                       // 各存储的访问URL
+    local?: string              // 本地路径
+    s3?: string                 // S3 URL
+    cos?: string                // 腾讯云 COS URL
+    oss?: string                // 阿里云 OSS URL
+  }
+}
+```
+
+### StreamPublicView (游客可见的直播信息)
+
+游客访问公开直播时，返回的字段子集（不含敏感信息）：
+
+```typescript
+{
+  id: number                    // 推流 ID
+  name: string                  // 直播名称
+  description: string           // 直播描述
+  status: string                // 状态: idle / pushing / ended
+  visibility: string            // 可见性: public / private
+  record_enabled: boolean       // 是否开启录制
+  record_status: string         // 录制状态: idle / recording / stopped / failed
+  streamer_name: string         // 直播人员姓名
+  streamer_contact: string      // 直播人员联系方式
+  scheduled_start_time: string  // 预计开始时间
+  scheduled_end_time: string    // 预计结束时间
+  actual_start_time: string     // 实际开始时间
+  actual_end_time: string       // 实际结束时间
+  current_viewers: number       // 当前观看人数
+  total_viewers: number         // 累计观看人次
+  peak_viewers: number          // 峰值观看人数
+  created_at: string            // 创建时间
+  updated_at: string            // 更新时间
+}
+```
+
+**注意**：游客不可见的字段包括：
+- `stream_key` - 推流密钥
+- `device_id` - 设备 ID
+- `record_files` - 录制文件列表
+- `protocol` - 推流协议
+- `bitrate` - 码率
+- `fps` - 帧率
+- `auto_kick_delay` - 超时延迟
+- `last_frame_at` - 最后一帧时间
+- `created_by` - 创建者 ID
 
 ### ShareLink (分享链接)
 

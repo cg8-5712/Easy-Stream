@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS streams (
     share_code_max_uses     INTEGER DEFAULT 0,
     share_code_used_count   INTEGER DEFAULT 0,
     record_enabled          BOOLEAN DEFAULT FALSE,
+    record_status           VARCHAR(20) DEFAULT 'idle',
     record_files            JSONB DEFAULT '[]',
     protocol                VARCHAR(16),
     bitrate                 INTEGER DEFAULT 0,
@@ -64,7 +65,8 @@ CREATE TABLE IF NOT EXISTS streams (
     peak_viewers            INTEGER DEFAULT 0,
     created_by              INTEGER REFERENCES users(id),
     created_at              TIMESTAMP DEFAULT NOW(),
-    updated_at              TIMESTAMP DEFAULT NOW()
+    updated_at              TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT streams_record_status_check CHECK (record_status IN ('idle', 'recording', 'stopped', 'failed'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_streams_status ON streams(status);
