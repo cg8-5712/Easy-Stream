@@ -203,3 +203,18 @@ type StreamPublicListResponse struct {
 	Total   int64               `json:"total"`
 	Streams []*StreamPublicView `json:"streams"`
 }
+
+// PlayURLsResponse 播放地址响应
+type PlayURLsResponse struct {
+	StreamID   int64             `json:"stream_id"`
+	StreamKey  string            `json:"stream_key"`
+	StreamName string            `json:"stream_name"`
+	Status     string            `json:"status"`
+	PlayURLs   map[string]string `json:"play_urls"`
+	PushURLs   map[string]string `json:"push_urls,omitempty"` // 仅管理员可见
+}
+
+// WebRTCPlayResponse WebRTC 播放/推流响应
+type WebRTCPlayResponse struct {
+	SDP string `json:"sdp"`
+}

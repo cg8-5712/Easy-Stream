@@ -44,10 +44,14 @@ type JWTConfig struct {
 }
 
 type ZLMediaKitConfig struct {
-	Host        string
-	Port        string
-	Secret      string
-	HookBaseURL string // Hook 回调基础 URL，如 http://localhost:8080/api/v1/hooks
+	Host         string
+	Port         string
+	Secret       string
+	HookBaseURL  string // Hook 回调基础 URL，如 http://localhost:8080/api/v1/hooks
+	HTTPPort     string // HLS/FLV 播放端口，默认 "80"
+	HTTPSPort    string // HTTPS 端口，默认 "443"
+	ExternalHost string // 外部访问地址（生成播放 URL）
+	WebRTCPort   string // WebRTC 端口，默认 "8000"
 }
 
 type LogConfig struct {
@@ -94,6 +98,9 @@ func Load() (*Config, error) {
 	viper.SetDefault("redis.db", 0)
 	viper.SetDefault("jwt.expireHour", 24)
 	viper.SetDefault("zlmediakit.port", "80")
+	viper.SetDefault("zlmediakit.httpPort", "80")
+	viper.SetDefault("zlmediakit.httpsPort", "443")
+	viper.SetDefault("zlmediakit.webrtcPort", "8000")
 	viper.SetDefault("log.level", "info")
 
 	// 支持环境变量

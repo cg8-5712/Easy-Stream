@@ -18,6 +18,7 @@ type StreamService struct {
 	shareLinkRepo *repository.ShareLinkRepository
 	redisRepo     *repository.RedisClient
 	zlmClient     *zlm.Client
+	zlmCfg        config.ZLMediaKitConfig
 }
 
 func NewStreamService(streamRepo *repository.StreamRepository, shareLinkRepo *repository.ShareLinkRepository, redisRepo *repository.RedisClient, zlmCfg config.ZLMediaKitConfig) *StreamService {
@@ -26,6 +27,7 @@ func NewStreamService(streamRepo *repository.StreamRepository, shareLinkRepo *re
 		shareLinkRepo: shareLinkRepo,
 		redisRepo:     redisRepo,
 		zlmClient:     zlm.NewClient(zlmCfg.Host, zlmCfg.Port, zlmCfg.Secret),
+		zlmCfg:        zlmCfg,
 	}
 }
 
@@ -619,4 +621,90 @@ func (s *StreamService) generateAccessToken() (string, error) {
 // strPtr 将字符串转换为指针
 func strPtr(s string) *string {
 	return &s
+}
+
+// GetPlayURLs 获取播放地址（支持游客和管理员）
+func (s *StreamService) GetPlayURLs(streamKey string, isAdmin bool) (*model.PlayURLsResponse, error) {
+	stream, err := s.streamRepo.GetByKey(streamKey)
+	if err != nil {
+		return nil, err
+	}
+	if stream == nil {
+		return nil, ErrStreamNotFound
+	}
+
+	// 私有直播不允许游客访问
+	if stream.Visibility == model.StreamVisibilityPrivate && !isAdmin {
+		return nil, ErrStreamNotFound
+	}
+
+	// 构建播放地址
+	host := s.zlmCfg.ExternalHost
+	if host == "" {
+		host = s.zlmCfg.Host
+	}
+
+	httpPort := s.zlmCfg.HTTPPort
+	if httpPort == "" {
+		httpPort = "80"
+	}
+
+	webrtcPort := s.zlmCfg.WebRTCPort
+	if webrtcPort == "" {
+		webrtcPort = "8000"
+	}
+
+	playURLs := map[string]string{
+		"webrtc":   fmt.Sprintf("webrtc://%s:%s/live/%s", host, webrtcPort, streamKey),
+		"hls":      fmt.Sprintf("http://%s:%s/live/%s/hls.m3u8", host, httpPort, streamKey),
+		"http_flv": fmt.Sprintf("http://%s:%s/live/%s.live.flv", host, httpPort, streamKey),
+		"ws_flv":   fmt.Sprintf("ws://%s:%s/live/%s.live.flv", host, httpPort, streamKey),
+	}
+
+	resp := &model.PlayURLsResponse{
+		StreamID:   stream.ID,
+		StreamKey:  streamKey,
+		StreamName: stream.Name,
+		Status:     stream.Status,
+		PlayURLs:   playURLs,
+	}
+
+	// 管理员才返回推流地址
+	if isAdmin {
+		resp.PushURLs = map[string]string{
+			"rtmp":    fmt.Sprintf("rtmp://%s:1935/live/%s", host, streamKey),
+			"rtsp":    fmt.Sprintf("rtsp://%s:554/live/%s", host, streamKey),
+			"srt":     fmt.Sprintf("srt://%s:9000?streamid=#!::r=live/%s,m=publish", host, streamKey),
+			"http_ts": fmt.Sprintf("http://%s:%s/live/%s.live.ts", host, httpPort, streamKey),
+		}
+	}
+
+	return resp, nil
+}
+
+// WebRTCPush 处理 WebRTC 推流
+func (s *StreamService) WebRTCPush(streamKey, offerSDP string) (*model.WebRTCPlayResponse, error) {
+	// 1. 验证 stream_key 是否存在
+	stream, err := s.streamRepo.GetByKey(streamKey)
+	if err != nil {
+		return nil, err
+	}
+	if stream == nil {
+		return nil, ErrStreamNotFound
+	}
+
+	// 2. 检查直播状态（不能是已结束）
+	if stream.Status == model.StreamStatusEnded {
+		return nil, ErrStreamExpired
+	}
+
+	// 3. 调用 ZLM WebRTC Push API
+	resp, err := s.zlmClient.WebRTCPush("live", streamKey, offerSDP)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.WebRTCPlayResponse{
+		SDP: resp.SDP,
+	}, nil
 }

@@ -345,3 +345,54 @@ func (h *StreamHandler) End(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "stream ended"})
 }
+
+// GetPlayURLs 获取播放地址
+func (h *StreamHandler) GetPlayURLs(c *gin.Context) {
+	key := c.Param("key")
+
+	// 检查是否为管理员
+	_, isAdmin := c.Get("user_id")
+
+	resp, err := h.streamSvc.GetPlayURLs(key, isAdmin)
+	if err != nil {
+		switch err {
+		case service.ErrStreamNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// WebRTCPush WebRTC 推流接口（只需要有效的 stream_key）
+func (h *StreamHandler) WebRTCPush(c *gin.Context) {
+	key := c.Param("key")
+
+	var req struct {
+		SDP string `json:"sdp" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// WebRTC 推流只需要有效的 stream_key，不需要管理员认证
+	// 这与 RTMP/RTSP/SRT 推流的验证逻辑一致
+	resp, err := h.streamSvc.WebRTCPush(key, req.SDP)
+	if err != nil {
+		switch err {
+		case service.ErrStreamNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		case service.ErrStreamExpired:
+			c.JSON(http.StatusForbidden, gin.H{"error": "stream has expired"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

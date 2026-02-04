@@ -141,6 +141,10 @@ func main() {
 			// WebRTC 播放接口（游客和管理员都可以使用）
 			streams.POST("/webrtc/:id", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.WebRTCPlay)
 			streams.GET("/webrtc/:id", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.GetWebRTCSDP)
+			// 获取播放地址（游客可访问公开直播，管理员可访问所有）
+			streams.GET("/:key/play-urls", middleware.OptionalAuth(cfg.JWT.Secret), streamHandler.GetPlayURLs)
+			// WebRTC 推流接口（只需要有效的 stream_key，不需要认证）
+			streams.POST("/:key/webrtc-push", streamHandler.WebRTCPush)
 
 			// 管理员接口（需要认证）
 			admin := streams.Group("")
