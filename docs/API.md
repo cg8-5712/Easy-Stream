@@ -424,11 +424,16 @@ Authorization: Bearer {access_token}
 
 **推流地址**
 - RTMP: `rtmp://{server}:1935/live/{stream_key}`
-- RTSP: `rtsp://{server}:8554/live/{stream_key}`
+- RTSP: `rtsp://{server}:554/live/{stream_key}`
 - SRT: `srt://{server}:9000?streamid=#!::r=live/{stream_key},m=publish`
+- HTTP-TS: `http://{server}:80/live/{stream_key}.live.ts` ⭐ 新增
+- WebRTC: `POST http://{server}:8080/api/v1/streams/{stream_key}/webrtc-push` ⭐ 新增
 
 **播放地址**
 - WebRTC: `webrtc://{server}:8000/live/{stream_key}`
+- HLS: `http://{server}:80/live/{stream_key}/hls.m3u8` ⭐ 新增
+- HTTP-FLV: `http://{server}:80/live/{stream_key}.live.flv` ⭐ 新增
+- WebSocket-FLV: `ws://{server}:80/live/{stream_key}.live.flv` ⭐ 新增
 
 **回放地址**（录制开启且直播结束后可用）
 - HTTP: `http://{server}:8080/recordings/{record_file}`
@@ -1614,5 +1619,207 @@ POST /api/v1/hooks/on_player_disconnect
 
 ---
 
-**文档版本**: v2.1
-**最后更新**: 2026-01-16
+**文档版本**: v2.2
+**最后更新**: 2026-02-04
+
+---
+
+## 6. 播放地址接口 ⭐ 新增
+
+### 6.1 获取播放地址
+
+**接口地址**
+```
+GET /api/v1/streams/:key/play-urls
+```
+
+**权限说明**
+- 游客：可访问公开直播的播放地址
+- 管理员：可访问所有直播的播放地址和推流地址
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+
+**请求头（可选）**
+```
+Authorization: Bearer {access_token}
+```
+
+**响应示例** (200 OK) - 游客访问公开直播
+
+```json
+{
+  "stream_id": 123,
+  "stream_key": "abc123def456",
+  "stream_name": "测试直播",
+  "status": "pushing",
+  "play_urls": {
+    "webrtc": "webrtc://192.168.1.9:8000/live/abc123def456",
+    "hls": "http://192.168.1.9:80/live/abc123def456/hls.m3u8",
+    "http_flv": "http://192.168.1.9:80/live/abc123def456.live.flv",
+    "ws_flv": "ws://192.168.1.9:80/live/abc123def456.live.flv"
+  }
+}
+```
+
+**响应示例** (200 OK) - 管理员访问
+
+```json
+{
+  "stream_id": 123,
+  "stream_key": "abc123def456",
+  "stream_name": "测试直播",
+  "status": "pushing",
+  "play_urls": {
+    "webrtc": "webrtc://192.168.1.9:8000/live/abc123def456",
+    "hls": "http://192.168.1.9:80/live/abc123def456/hls.m3u8",
+    "http_flv": "http://192.168.1.9:80/live/abc123def456.live.flv",
+    "ws_flv": "ws://192.168.1.9:80/live/abc123def456.live.flv"
+  },
+  "push_urls": {
+    "rtmp": "rtmp://192.168.1.9:1935/live/abc123def456",
+    "rtsp": "rtsp://192.168.1.9:554/live/abc123def456",
+    "srt": "srt://192.168.1.9:9000?streamid=#!::r=live/abc123def456,m=publish",
+    "http_ts": "http://192.168.1.9:80/live/abc123def456.live.ts"
+  }
+}
+```
+
+**播放协议说明**
+
+| 协议 | 延迟 | 兼容性 | 适用场景 |
+|------|------|--------|---------|
+| webrtc | < 200ms | 现代浏览器 | 实时互动、低延迟要求 |
+| hls | 6-15s | 所有设备 | 兼容性优先、移动端 |
+| http_flv | 1-3s | 需 flv.js | 平衡延迟和兼容性 |
+| ws_flv | 1-3s | 需 flv.js | 实时性要求较高 |
+
+**推流协议说明**（仅管理员可见）
+
+| 协议 | 端口 | 适用场景 |
+|------|------|---------|
+| rtmp | 1935 | OBS 推流（推荐） |
+| rtsp | 554 | 摄像头设备 |
+| srt | 9000/UDP | 低延迟、抗丢包 |
+| http_ts | 80 | 防火墙友好 |
+
+**错误响应**
+
+404 Not Found:
+```json
+{
+  "error": "stream not found"
+}
+```
+
+---
+
+## 7. WebRTC 推流接口 ⭐ 新增
+
+### 7.1 WebRTC 推流
+
+**接口地址**
+```
+POST /api/v1/streams/:key/webrtc-push
+```
+
+**权限说明**
+- 无需管理员认证
+- 只需要有效的 stream_key（与 RTMP/RTSP/SRT 推流一致）
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| sdp | string | 是 | WebRTC SDP Offer |
+
+**请求示例**
+```json
+{
+  "sdp": "v=0\r\no=- 1234567890 1234567890 IN IP4 0.0.0.0\r\ns=WebRTC Push\r\nt=0 0\r\na=group:BUNDLE 0 1\r\na=msid-semantic: WMS stream\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\n..."
+}
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "sdp": "v=0\r\no=- 9876543210 9876543210 IN IP4 192.168.1.9\r\ns=ZLMediaKit\r\nt=0 0\r\na=group:BUNDLE 0 1\r\na=msid-semantic: WMS stream\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 192.168.1.9\r\n..."
+}
+```
+
+**错误响应**
+
+404 Not Found:
+```json
+{
+  "error": "stream not found"
+}
+```
+
+403 Forbidden:
+```json
+{
+  "error": "stream has expired"
+}
+```
+
+**使用示例（JavaScript）**
+
+```javascript
+async function startWebRTCPush(streamKey) {
+  // 获取本地媒体流
+  const localStream = await navigator.mediaDevices.getUserMedia({
+    video: true,
+    audio: true
+  });
+
+  // 创建 RTCPeerConnection
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  });
+
+  // 添加本地流
+  localStream.getTracks().forEach(track => {
+    pc.addTrack(track, localStream);
+  });
+
+  // 创建 Offer
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  // 发送 Offer 到服务器
+  const response = await fetch(`http://localhost:8080/api/v1/streams/${streamKey}/webrtc-push`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ sdp: offer.sdp })
+  });
+
+  const { sdp: answerSDP } = await response.json();
+
+  // 设置远端 SDP Answer
+  await pc.setRemoteDescription({
+    type: 'answer',
+    sdp: answerSDP
+  });
+
+  console.log('WebRTC 推流成功！');
+}
+```
+
+**说明**
+- WebRTC 推流会自动触发 `on_publish` Hook 进行验证
+- 推流协议字段 `schema` 将显示为 `webrtc`
+- 推流成功后，观众可通过任意播放协议观看
+
+---
