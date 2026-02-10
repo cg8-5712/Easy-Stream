@@ -10,7 +10,10 @@ import (
 	"easy-stream/internal/model"
 	"easy-stream/internal/repository"
 	"easy-stream/internal/zlm"
+	"easy-stream/pkg/logger"
 	"easy-stream/pkg/utils"
+
+	"go.uber.org/zap"
 )
 
 type StreamService struct {
@@ -134,15 +137,21 @@ func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool, acce
 
 	// 如果游客传入了 access_token，尝试获取对应的私有直播
 	if !isLoggedIn && accessToken != "" {
-		fmt.Printf("[DEBUG] List: accessToken provided: %s\n", accessToken[:min(16, len(accessToken))]+"...")
+		logger.Debug("processing access token for guest user",
+			zap.Bool("has_access_token", true))
 		streamKey, err := s.redisRepo.GetStreamKeyByAccessToken(accessToken)
-		fmt.Printf("[DEBUG] List: GetStreamKeyByAccessToken result: streamKey=%s, err=%v\n", streamKey, err)
+		logger.Debug("retrieved stream key from access token",
+			zap.String("stream_key", streamKey),
+			zap.Error(err))
 		if err == nil && streamKey != "" {
 			// 获取对应的私有直播
 			privateStream, err := s.streamRepo.GetByKey(streamKey)
-			fmt.Printf("[DEBUG] List: GetByKey result: stream=%v, err=%v\n", privateStream != nil, err)
+			logger.Debug("retrieved private stream",
+				zap.Bool("stream_found", privateStream != nil),
+				zap.Error(err))
 			if err == nil && privateStream != nil {
-				fmt.Printf("[DEBUG] List: privateStream.Status=%s\n", privateStream.Status)
+				logger.Debug("checking private stream status",
+					zap.String("status", string(privateStream.Status)))
 				// 只要不是已结束的直播就可以显示
 				if privateStream.Status != model.StreamStatusEnded {
 					// 检查是否已经在列表中
@@ -157,7 +166,8 @@ func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool, acce
 						// 将私有直播添加到列表开头
 						streams = append([]*model.Stream{privateStream}, streams...)
 						total++
-						fmt.Printf("[DEBUG] List: Added private stream to list\n")
+						logger.Debug("added private stream to list",
+							zap.Int64("stream_id", privateStream.ID))
 					}
 				}
 			}
@@ -250,12 +260,16 @@ func (s *StreamService) Update(key string, req *model.UpdateStreamRequest) (*mod
 				// 开启录制
 				if _, err := s.zlmClient.StartRecord("live", key, zlm.RecordTypeMP4, ""); err != nil {
 					// 记录错误但不阻止更新
-					fmt.Printf("failed to start record for stream %s: %v\n", key, err)
+					logger.Error("failed to start record for stream",
+						zap.String("stream_key", key),
+						zap.Error(err))
 				}
 			} else {
 				// 关闭录制
 				if _, err := s.zlmClient.StopRecord("live", key, zlm.RecordTypeMP4); err != nil {
-					fmt.Printf("failed to stop record for stream %s: %v\n", key, err)
+					logger.Error("failed to stop record for stream",
+						zap.String("stream_key", key),
+						zap.Error(err))
 				}
 			}
 		}
@@ -321,19 +335,25 @@ func (s *StreamService) endStreamInternal(stream *model.Stream) error {
 
 	// 清理 Redis 中的访问令牌（分享码和分享链接生成的令牌）
 	if err := s.redisRepo.DeleteStreamAccessTokens(streamKey); err != nil {
-		fmt.Printf("failed to delete access tokens for stream %s: %v\n", streamKey, err)
+		logger.Warn("failed to delete access tokens for stream",
+			zap.String("stream_key", streamKey),
+			zap.Error(err))
 	}
 
 	// 清理分享码
 	if stream.ShareCode != nil {
 		if err := s.streamRepo.DeleteShareCode(streamKey); err != nil {
-			fmt.Printf("failed to delete share code for stream %s: %v\n", streamKey, err)
+			logger.Warn("failed to delete share code for stream",
+				zap.String("stream_key", streamKey),
+				zap.Error(err))
 		}
 	}
 
 	// 清理分享链接
 	if err := s.shareLinkRepo.DeleteByStreamKey(streamKey); err != nil {
-		fmt.Printf("failed to delete share links for stream %s: %v\n", streamKey, err)
+		logger.Warn("failed to delete share links for stream",
+			zap.String("stream_key", streamKey),
+			zap.Error(err))
 	}
 
 	// 重置当前观看人数
@@ -511,7 +531,9 @@ func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 
 		go func() {
 			if _, err := s.zlmClient.StartRecord("live", req.Stream, zlm.RecordTypeMP4, ""); err != nil {
-				fmt.Printf("failed to start record for stream %s: %v\n", req.Stream, err)
+				logger.Error("failed to start record for stream",
+					zap.String("stream_key", req.Stream),
+					zap.Error(err))
 				// 录制失败，更新状态为 failed
 				s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
 			}
@@ -538,7 +560,9 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 
 		go func() {
 			if _, err := s.zlmClient.StopRecord("live", req.Stream, zlm.RecordTypeMP4); err != nil {
-				fmt.Printf("failed to stop record for stream %s: %v\n", req.Stream, err)
+				logger.Error("failed to stop record for stream",
+					zap.String("stream_key", req.Stream),
+					zap.Error(err))
 			}
 		}()
 	}
@@ -594,7 +618,9 @@ func (s *StreamService) CheckExpiredStreams() error {
 
 		// 如果已超时且没有在推流，自动结束直播
 		if now.After(autoEndTime) {
-			fmt.Printf("Auto ending stream %s (past scheduled end time + %d minutes without streaming)\n", stream.StreamKey, stream.AutoKickDelay)
+			logger.Info("auto ending stream past scheduled end time",
+				zap.String("stream_key", stream.StreamKey),
+				zap.Int("auto_kick_delay_minutes", stream.AutoKickDelay))
 			s.endStreamInternal(stream)
 		}
 	}

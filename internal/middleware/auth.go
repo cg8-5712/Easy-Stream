@@ -42,9 +42,24 @@ func OptionalAuth(secret string) gin.HandlerFunc {
 			return
 		}
 
+		// 安全地提取用户信息（带类型检查）
+		userIDFloat, ok := claims["user_id"].(float64)
+		if !ok {
+			// 类型不匹配，可选认证失败时继续但不设置用户信息
+			c.Next()
+			return
+		}
+
+		username, ok := claims["username"].(string)
+		if !ok {
+			// 类型不匹配，可选认证失败时继续但不设置用户信息
+			c.Next()
+			return
+		}
+
 		// 将用户信息存入上下文
-		c.Set("user_id", int64(claims["user_id"].(float64)))
-		c.Set("username", claims["username"].(string))
+		c.Set("user_id", int64(userIDFloat))
+		c.Set("username", username)
 
 		c.Next()
 	}
@@ -88,9 +103,26 @@ func Auth(secret string) gin.HandlerFunc {
 			return
 		}
 
+		// 安全地提取用户信息（带类型检查）
+		userIDFloat, ok := claims["user_id"].(float64)
+		if !ok {
+			// 必需认证：类型不匹配时返回错误
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user_id in token"})
+			c.Abort()
+			return
+		}
+
+		username, ok := claims["username"].(string)
+		if !ok {
+			// 必需认证：类型不匹配时返回错误
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username in token"})
+			c.Abort()
+			return
+		}
+
 		// 将用户信息存入上下文
-		c.Set("user_id", int64(claims["user_id"].(float64)))
-		c.Set("username", claims["username"].(string))
+		c.Set("user_id", int64(userIDFloat))
+		c.Set("username", username)
 
 		c.Next()
 	}

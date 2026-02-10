@@ -4,14 +4,15 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
-	"log"
 	"sort"
 	"strconv"
 	"strings"
 
 	"easy-stream/internal/config"
+	"easy-stream/pkg/logger"
 
 	_ "github.com/lib/pq"
+	"go.uber.org/zap"
 )
 
 // 当前数据库最新版本
@@ -57,11 +58,11 @@ func runMigrations(db *sql.DB) error {
 
 	if isEmpty {
 		// 空数据库：直接执行 init-db.sql 初始化到最新版本
-		log.Printf("检测到空数据库，执行初始化脚本...")
+		logger.Info("detected empty database, executing initialization script")
 		if err := initDatabase(db); err != nil {
 			return err
 		}
-		log.Printf("数据库初始化完成，版本: %d", LatestDBVersion)
+		logger.Info("database initialization completed", zap.Int("version", LatestDBVersion))
 		return nil
 	}
 
@@ -71,10 +72,12 @@ func runMigrations(db *sql.DB) error {
 		return err
 	}
 
-	log.Printf("当前数据库版本: %d, 目标版本: %d", currentVersion, LatestDBVersion)
+	logger.Info("checking database version",
+		zap.Int("current_version", currentVersion),
+		zap.Int("target_version", LatestDBVersion))
 
 	if currentVersion >= LatestDBVersion {
-		log.Printf("数据库已是最新版本")
+		logger.Info("database is already at latest version")
 		return nil
 	}
 
@@ -83,7 +86,7 @@ func runMigrations(db *sql.DB) error {
 		if err := executeMigrationFile(db, v); err != nil {
 			return fmt.Errorf("迁移 v%d 失败: %w", v, err)
 		}
-		log.Printf("迁移 v%d 完成", v)
+		logger.Info("migration completed", zap.Int("version", v))
 	}
 
 	return nil
@@ -148,7 +151,7 @@ func executeMigrationFile(db *sql.DB, version int) error {
 		return err
 	}
 
-	log.Printf("执行迁移文件: %s", filename)
+	logger.Info("executing migration file", zap.String("filename", filename))
 
 	// 读取迁移文件内容
 	content, err := migrationsFS.ReadFile(filename)

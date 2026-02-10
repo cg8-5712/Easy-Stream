@@ -14,6 +14,7 @@ import (
 	"easy-stream/pkg/logger"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -31,7 +32,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	log.Printf("Database connected successfully: %s:%s/%s", cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName)
+	logger.Info("database connected successfully",
+		zap.String("host", cfg.Database.Host),
+		zap.String("port", cfg.Database.Port),
+		zap.String("database", cfg.Database.DBName))
 	defer db.Close()
 
 	// 初始化 Redis
@@ -39,13 +43,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to redis: %v", err)
 	}
-	log.Printf("Redis connected successfully: %s:%s", cfg.Redis.Host, cfg.Redis.Port)
+	logger.Info("redis connected successfully",
+		zap.String("host", cfg.Redis.Host),
+		zap.String("port", cfg.Redis.Port))
 	defer rdb.Close()
 
 	// Debug 模式下插入种子数据
 	if cfg.Server.Mode == "debug" {
 		if err := repository.SeedData(db); err != nil {
-			log.Printf("Warning: Failed to seed data: %v", err)
+			logger.Warn("failed to seed data", zap.Error(err))
 		}
 	}
 
@@ -64,7 +70,7 @@ func main() {
 	if len(cfg.Storage.Targets) > 0 {
 		storageManager, err = storage.NewManager(cfg.Storage)
 		if err != nil {
-			log.Printf("Warning: Failed to init storage manager: %v", err)
+			logger.Warn("failed to init storage manager", zap.Error(err))
 		}
 	}
 
@@ -75,12 +81,13 @@ func main() {
 	if cfg.ZLMediaKit.HookBaseURL != "" {
 		zlmClient := zlm.NewClient(cfg.ZLMediaKit.Host, cfg.ZLMediaKit.Port, cfg.ZLMediaKit.Secret)
 		if err := zlmClient.ConfigureHooks(cfg.ZLMediaKit.HookBaseURL); err != nil {
-			log.Printf("Warning: Failed to configure ZLMediaKit hooks: %v", err)
+			logger.Warn("failed to configure ZLMediaKit hooks", zap.Error(err))
 		} else {
-			log.Printf("ZLMediaKit hooks configured successfully: %s", cfg.ZLMediaKit.HookBaseURL)
+			logger.Info("ZLMediaKit hooks configured successfully",
+				zap.String("hook_base_url", cfg.ZLMediaKit.HookBaseURL))
 		}
 	} else {
-		log.Printf("Warning: zlmediakit.hookBaseURL not configured, hooks will not work")
+		logger.Warn("zlmediakit.hookBaseURL not configured, hooks will not work")
 	}
 
 	// 初始化 Handler
@@ -96,7 +103,7 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			if err := streamSvc.CheckExpiredStreams(); err != nil {
-				log.Printf("Failed to check expired streams: %v", err)
+				logger.Error("failed to check expired streams", zap.Error(err))
 			}
 		}
 	}()
@@ -118,7 +125,7 @@ func main() {
 		// 认证接口
 		auth := api.Group("/auth")
 		{
-			auth.POST("/login", authHandler.Login)
+			auth.POST("/login", middleware.LoginRateLimit(rdb.Client), authHandler.Login)
 			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.POST("/logout", authHandler.Logout)
 			auth.GET("/profile", middleware.Auth(cfg.JWT.Secret), authHandler.Profile)
@@ -127,8 +134,8 @@ func main() {
 		// 分享接口（游客）
 		shares := api.Group("/shares")
 		{
-			shares.POST("/verify-code", streamHandler.VerifyShareCode) // 验证分享码
-			shares.GET("/link/:token", shareLinkHandler.Verify)        // 验证分享链接
+			shares.POST("/verify-code", middleware.ShareCodeVerifyRateLimit(rdb.Client), streamHandler.VerifyShareCode) // 验证分享码
+			shares.GET("/link/:token", middleware.ShareLinkVerifyRateLimit(rdb.Client), shareLinkHandler.Verify)        // 验证分享链接
 		}
 
 		// 推流管理接口
@@ -194,7 +201,7 @@ func main() {
 
 	// 启动服务
 	addr := cfg.Server.Host + ":" + cfg.Server.Port
-	log.Printf("Server starting on %s", addr)
+	logger.Info("server starting", zap.String("address", addr))
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

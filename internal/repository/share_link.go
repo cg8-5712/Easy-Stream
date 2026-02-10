@@ -95,6 +95,28 @@ func (r *ShareLinkRepository) IncrementUsedCount(token string) error {
 	return err
 }
 
+// IncrementUsedCountIfNotExceeded 原子地增加使用次数（仅当未超限时）
+// 返回值：新的使用次数，如果返回 0 表示已达上限或 token 不存在
+func (r *ShareLinkRepository) IncrementUsedCountIfNotExceeded(token string) (int, error) {
+	query := `
+		UPDATE share_links
+		SET used_count = used_count + 1
+		WHERE token = $1
+		  AND (max_uses = 0 OR used_count < max_uses)
+		RETURNING used_count
+	`
+	var newCount int
+	err := r.db.QueryRow(query, token).Scan(&newCount)
+	if err == sql.ErrNoRows {
+		// 更新失败：要么 token 不存在，要么已达上限
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return newCount, nil
+}
+
 // UpdateMaxUses 更新最大使用次数
 func (r *ShareLinkRepository) UpdateMaxUses(id int64, maxUses int) error {
 	query := `UPDATE share_links SET max_uses = $1 WHERE id = $2`

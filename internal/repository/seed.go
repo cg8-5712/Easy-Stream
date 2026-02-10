@@ -2,15 +2,17 @@ package repository
 
 import (
 	"database/sql"
-	"log"
 	"time"
 
+	"easy-stream/pkg/logger"
+
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // SeedData 在 debug 模式下插入测试数据
 func SeedData(db *sql.DB) error {
-	log.Println("Debug模式: 开始插入种子数据...")
+	logger.Info("debug mode: starting to insert seed data")
 
 	// 插入测试用户
 	if err := seedUsers(db); err != nil {
@@ -22,7 +24,7 @@ func SeedData(db *sql.DB) error {
 		return err
 	}
 
-	log.Println("Debug模式: 种子数据插入完成")
+	logger.Info("debug mode: seed data insertion completed")
 	return nil
 }
 
@@ -64,7 +66,9 @@ func seedUsers(db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("Debug模式: 创建用户 %s (密码: %s)", u.username, u.password)
+		logger.Debug("debug mode: created user",
+			zap.String("username", u.username),
+			zap.String("password", u.password))
 	}
 
 	return nil
@@ -117,7 +121,10 @@ func seedStreams(db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("Debug模式: 创建直播流 %s (%s) - %s", s.name, s.streamKey, s.status)
+		logger.Debug("debug mode: created stream",
+			zap.String("name", s.name),
+			zap.String("stream_key", s.streamKey),
+			zap.String("status", s.status))
 	}
 
 	return nil

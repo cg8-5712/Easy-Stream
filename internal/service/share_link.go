@@ -113,14 +113,15 @@ func (s *ShareLinkService) VerifyToken(token string) (*model.StreamAccessToken, 
 		return nil, ErrStreamEnded
 	}
 
-	// 检查使用次数限制
-	if link.MaxUses > 0 && link.UsedCount >= link.MaxUses {
-		return nil, ErrShareLinkMaxUsesReached
-	}
-
-	// 增加使用次数
-	if err := s.shareLinkRepo.IncrementUsedCount(token); err != nil {
+	// 原子地增加使用次数并检查限制
+	// 这个操作在数据库层面是原子的，避免了并发竞态条件
+	newCount, err := s.shareLinkRepo.IncrementUsedCountIfNotExceeded(token)
+	if err != nil {
 		return nil, err
+	}
+	if newCount == 0 {
+		// 返回 0 表示已达上限
+		return nil, ErrShareLinkMaxUsesReached
 	}
 
 	// 生成访问令牌（有效期2小时）
