@@ -25,103 +25,55 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build binaries
         run: |
-          # 创建输出目录
           mkdir -p dist
+          VERSION="${{ steps.version.outputs.VERSION }}"
 
-          # 定义构建目标
-          platforms=(
-            "linux/amd64"
-            "linux/arm64"
-            "windows/amd64"
-            "darwin/amd64"
-            "darwin/arm64"
-          )
+          build_for() {
+            local os=$1
+            local arch=$2
+            local ext=""
 
-          for platform in "${platforms[@]}"; do
-            GOOS=${platform%/*}
-            GOARCH=${platform#*/}
-
-            output_name="easy-stream-${{ steps.version.outputs.VERSION }}-${GOOS}-${GOARCH}"
-
-            if [ "$GOOS" = "windows" ]; then
-              output_name="${output_name}.exe"
+            if [ "$os" = "windows" ]; then
+              ext=".exe"
             fi
 
-            echo "Building for ${GOOS}/${GOARCH}..."
+            local output="dist/easy-stream-${VERSION}-${os}-${arch}${ext}"
+            echo "Building ${os}/${arch}..."
 
-            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
-              -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
-              -o "dist/${output_name}" \
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build \
+              -ldflags="-s -w -X main.Version=${VERSION}" \
+              -o "$output" \
               ./cmd/server
+          }
 
-            if [ $? -ne 0 ]; then
-              echo "Build failed for ${GOOS}/${GOARCH}"
-              exit 1
-            fi
-          done
+          build_for linux amd64
+          build_for linux arm64
+          build_for windows amd64
+          build_for darwin amd64
+          build_for darwin arm64
 
-      - name: Create release packages
+          echo "Build complete. Files:"
+          ls -la dist/
+
+      - name: Create README files
         run: |
-          cd dist
-
-          # 为每个平台创建压缩包
-          for file in easy-stream-*; do
-            if [[ $file == *.exe ]]; then
-              # Windows 平台
-              base_name="${file%.exe}"
-              rm -rf "${base_name}"
-              mkdir -p "${base_name}"
-              cp "$file" "${base_name}/"
-              cp ../config.example.yaml "${base_name}/"
-
-              # 创建 README
-              cat > "${base_name}/README.txt" <<'EOFREADME'
+          cat > /tmp/readme-unix.txt << 'EOF'
           Easy-Stream - 流媒体管理系统
-          ================================
 
           快速开始：
           1. 复制 config.example.yaml 为 config.yaml
           2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
-          3. 运行 easy-stream-*.exe
-
-          配置说明：
-          - 必须配置：数据库连接、Redis 连接、JWT secret
-          - ZLMediaKit 配置：确保 hookBaseURL 指向本服务地址
-          - 存储配置：默认使用本地存储，可选配置 S3/COS/OSS
-
-          环境变量支持：
-          可以通过环境变量覆盖配置，例如：
-            DATABASE_HOST=localhost
-            REDIS_PORT=6379
-            JWT_SECRET=your-secret
-
-          更多信息：https://github.com/cg8-5712/Easy-Stream
-          EOFREADME
-
-              zip -r "${base_name}.zip" "${base_name}"
-              rm -rf "${base_name}"
-            else
-              # Linux/macOS 平台
-              base_name="$file"
-              rm -rf "${base_name}"
-              mkdir -p "${base_name}"
-              cp "$file" "${base_name}/"
-              cp ../config.example.yaml "${base_name}/"
-
-              # 创建 README
-              cat > "${base_name}/README.txt" <<'EOFREADME'
-          Easy-Stream - 流媒体管理系统
-          ================================
-
-          快速开始：
-          1. 复制 config.example.yaml 为 config.yaml
-          2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
-          3. 添加执行权限：chmod +x easy-stream-*
-          4. 运行：./easy-stream-*
+          3. 添加执行权限：chmod +x easy-stream
+          4. 运行：./easy-stream
 
           配置说明：
           - 必须配置：数据库连接、Redis 连接、JWT secret
@@ -135,24 +87,89 @@ jobs:
             export JWT_SECRET=your-secret
 
           更多信息：https://github.com/cg8-5712/Easy-Stream
-          EOFREADME
+          EOF
 
-              tar -czf "${base_name}.tar.gz" "${base_name}"
-              rm -rf "${base_name}"
-            fi
-          done
+          cat > /tmp/readme-windows.txt << 'EOF'
+          Easy-Stream - 流媒体管理系统
+
+          快速开始：
+          1. 复制 config.example.yaml 为 config.yaml
+          2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
+          3. 运行 easy-stream.exe
+
+          配置说明：
+          - 必须配置：数据库连接、Redis 连接、JWT secret
+          - ZLMediaKit 配置：确保 hookBaseURL 指向本服务地址
+          - 存储配置：默认使用本地存储，可选配置 S3/COS/OSS
+
+          环境变量支持：
+          可以通过环境变量覆盖配置，例如：
+            set DATABASE_HOST=localhost
+            set REDIS_PORT=6379
+            set JWT_SECRET=your-secret
+
+          更多信息：https://github.com/cg8-5712/Easy-Stream
+          EOF
+
+      - name: Create release packages
+        run: |
+          cd dist
+          VERSION="${{ steps.version.outputs.VERSION }}"
+
+          package_unix() {
+            local os=$1
+            local arch=$2
+            local binary="easy-stream-${VERSION}-${os}-${arch}"
+            local pkg_dir="pkg-${os}-${arch}"
+
+            rm -rf "$pkg_dir"
+            mkdir -p "$pkg_dir"
+            cp "$binary" "$pkg_dir/easy-stream"
+            cp ../config.example.yaml "$pkg_dir/"
+            cp /tmp/readme-unix.txt "$pkg_dir/README.txt"
+
+            tar -czf "${binary}.tar.gz" -C "$pkg_dir" .
+            rm -rf "$pkg_dir"
+          }
+
+          package_windows() {
+            local arch=$1
+            local binary="easy-stream-${VERSION}-windows-${arch}.exe"
+            local pkg_dir="pkg-windows-${arch}"
+
+            rm -rf "$pkg_dir"
+            mkdir -p "$pkg_dir"
+            cp "$binary" "$pkg_dir/easy-stream.exe"
+            cp ../config.example.yaml "$pkg_dir/"
+            cp /tmp/readme-windows.txt "$pkg_dir/README.txt"
+
+            zip -rj "easy-stream-${VERSION}-windows-${arch}.zip" "$pkg_dir"
+            rm -rf "$pkg_dir"
+          }
+
+          package_unix linux amd64
+          package_unix linux arm64
+          package_unix darwin amd64
+          package_unix darwin arm64
+          package_windows amd64
+
+          rm -f easy-stream-*-linux-* easy-stream-*-darwin-* easy-stream-*.exe
+
+          echo "Packages created:"
+          ls -la
 
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum *.zip *.tar.gz > checksums.txt
+          sha256sum *.tar.gz *.zip > checksums.txt
+          cat checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/*.zip
             dist/*.tar.gz
+            dist/*.zip
             dist/checksums.txt
           body: |
             ## Easy-Stream ${{ steps.version.outputs.VERSION }}
@@ -161,11 +178,13 @@ jobs:
 
             请根据您的操作系统下载对应的压缩包：
 
-            - **Linux AMD64**: `easy-stream-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz`
-            - **Linux ARM64**: `easy-stream-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz`
-            - **Windows AMD64**: `easy-stream-${{ steps.version.outputs.VERSION }}-windows-amd64.zip`
-            - **macOS AMD64 (Intel)**: `easy-stream-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz`
-            - **macOS ARM64 (Apple Silicon)**: `easy-stream-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz`
+            | 平台 | 架构 | 下载 |
+            |------|------|------|
+            | Linux | AMD64 | `easy-stream-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz` |
+            | Linux | ARM64 | `easy-stream-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz` |
+            | Windows | AMD64 | `easy-stream-${{ steps.version.outputs.VERSION }}-windows-amd64.zip` |
+            | macOS | Intel | `easy-stream-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz` |
+            | macOS | Apple Silicon | `easy-stream-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz` |
 
             ### 安装步骤
 
@@ -184,14 +203,9 @@ jobs:
 
             ### 校验文件完整性
 
-            下载 `checksums.txt` 文件，使用以下命令验证：
             ```bash
             sha256sum -c checksums.txt
             ```
-
-            ### 更新日志
-
-            请查看提交历史了解本版本的更新内容。
           draft: false
           prerelease: false
         env:
