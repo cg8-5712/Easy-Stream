@@ -36,7 +36,7 @@ func main() {
 		zap.String("host", cfg.Database.Host),
 		zap.String("port", cfg.Database.Port),
 		zap.String("database", cfg.Database.DBName))
-	defer db.Close()
+	// GORM 自动管理连接池，无需手动 Close
 
 	// 初始化 Redis
 	rdb, err := repository.NewRedisClient(cfg.Redis)

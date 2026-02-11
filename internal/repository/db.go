@@ -11,8 +11,10 @@ import (
 	"easy-stream/internal/config"
 	"easy-stream/pkg/logger"
 
-	_ "github.com/lib/pq"
 	"go.uber.org/zap"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // 当前数据库最新版本
@@ -25,23 +27,34 @@ var migrationsFS embed.FS
 var initDBSQL string
 
 // NewPostgresDB 创建 PostgreSQL 连接并执行迁移
-func NewPostgresDB(cfg config.DatabaseConfig) (*sql.DB, error) {
+func NewPostgresDB(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode,
 	)
 
-	db, err := sql.Open("postgres", dsn)
+	// 配置 GORM 日志级别
+	gormConfig := &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent), // 生产环境使用 Silent
+	}
+
+	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := db.Ping(); err != nil {
+	// 获取底层 *sql.DB 用于迁移
+	sqlDB, err := db.DB()
+	if err != nil {
 		return nil, err
 	}
 
-	// 执行数据库迁移
-	if err := runMigrations(db); err != nil {
+	if err := sqlDB.Ping(); err != nil {
+		return nil, err
+	}
+
+	// 执行数据库迁移（使用原生 SQL）
+	if err := runMigrations(sqlDB); err != nil {
 		return nil, fmt.Errorf("数据库迁移失败: %w", err)
 	}
 

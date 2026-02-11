@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,11 +10,13 @@ import (
 	"easy-stream/internal/config"
 	"easy-stream/internal/repository"
 	"easy-stream/internal/zlm"
+
+	"gorm.io/gorm"
 )
 
 // SystemService 系统服务
 type SystemService struct {
-	db        *sql.DB
+	db        *gorm.DB
 	redis     *repository.RedisClient
 	zlmClient *zlm.Client
 	zlmConfig config.ZLMediaKitConfig
@@ -23,7 +24,7 @@ type SystemService struct {
 }
 
 // NewSystemService 创建系统服务
-func NewSystemService(db *sql.DB, redis *repository.RedisClient, zlmConfig config.ZLMediaKitConfig) *SystemService {
+func NewSystemService(db *gorm.DB, redis *repository.RedisClient, zlmConfig config.ZLMediaKitConfig) *SystemService {
 	return &SystemService{
 		db:        db,
 		redis:     redis,
@@ -95,7 +96,7 @@ func (s *SystemService) checkPostgres() *ServiceHealth {
 
 	// 不仅 Ping，还执行一个简单查询来验证凭据和权限
 	var result int
-	err := s.db.QueryRowContext(ctx, "SELECT 1").Scan(&result)
+	err := s.db.WithContext(ctx).Raw("SELECT 1").Scan(&result).Error
 	latency := time.Since(start)
 
 	if err != nil {

@@ -1,17 +1,18 @@
 package repository
 
 import (
-	"database/sql"
 	"time"
 
+	"easy-stream/internal/model"
 	"easy-stream/pkg/logger"
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // SeedData 在 debug 模式下插入测试数据
-func SeedData(db *sql.DB) error {
+func SeedData(db *gorm.DB) error {
 	logger.Info("debug mode: starting to insert seed data")
 
 	// 插入测试用户
@@ -29,7 +30,7 @@ func SeedData(db *sql.DB) error {
 }
 
 // seedUsers 插入测试用户
-func seedUsers(db *sql.DB) error {
+func seedUsers(db *gorm.DB) error {
 	users := []struct {
 		username string
 		password string
@@ -43,12 +44,9 @@ func seedUsers(db *sql.DB) error {
 
 	for _, u := range users {
 		// 检查用户是否已存在
-		var exists bool
-		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", u.username).Scan(&exists)
-		if err != nil {
-			return err
-		}
-		if exists {
+		var count int64
+		db.Model(&model.User{}).Where("username = ?", u.username).Count(&count)
+		if count > 0 {
 			continue
 		}
 
@@ -58,14 +56,18 @@ func seedUsers(db *sql.DB) error {
 			return err
 		}
 
-		// 插入用户
-		_, err = db.Exec(`
-			INSERT INTO users (username, password_hash, real_name, email, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $5)
-		`, u.username, string(hash), u.realName, u.email, time.Now())
-		if err != nil {
+		// 创建用户
+		user := &model.User{
+			Username:     u.username,
+			PasswordHash: string(hash),
+			RealName:     &u.realName,
+			Email:        &u.email,
+		}
+
+		if err := db.Create(user).Error; err != nil {
 			return err
 		}
+
 		logger.Debug("debug mode: created user",
 			zap.String("username", u.username),
 			zap.String("password", u.password))
@@ -75,11 +77,10 @@ func seedUsers(db *sql.DB) error {
 }
 
 // seedStreams 插入测试直播流
-func seedStreams(db *sql.DB) error {
+func seedStreams(db *gorm.DB) error {
 	// 获取 admin 用户 ID
-	var adminID int64
-	err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
-	if err != nil {
+	var admin model.User
+	if err := db.Where("username = ?", "admin").First(&admin).Error; err != nil {
 		return err
 	}
 
@@ -102,25 +103,33 @@ func seedStreams(db *sql.DB) error {
 	scheduledEnd := now.Add(24 * time.Hour)
 
 	for _, s := range streams {
-		// 检查是否已存在
-		var exists bool
-		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM streams WHERE stream_key = $1)", s.streamKey).Scan(&exists)
-		if err != nil {
-			return err
-		}
-		if exists {
+		// 检查直播流是否已存在
+		var count int64
+		db.Model(&model.Stream{}).Where("stream_key = ?", s.streamKey).Count(&count)
+		if count > 0 {
 			continue
 		}
 
-		// 插入直播流
-		_, err = db.Exec(`
-			INSERT INTO streams (stream_key, name, description, visibility, status,
-				streamer_name, scheduled_start_time, scheduled_end_time, created_by, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
-		`, s.streamKey, s.name, s.description, s.visibility, s.status, s.streamer, scheduledStart, scheduledEnd, adminID, now)
-		if err != nil {
+		// 创建直播流
+		stream := &model.Stream{
+			StreamKey:          s.streamKey,
+			Name:               s.name,
+			Description:        &s.description,
+			Visibility:         s.visibility,
+			Status:             s.status,
+			StreamerName:       &s.streamer,
+			ScheduledStartTime: &scheduledStart,
+			ScheduledEndTime:   &scheduledEnd,
+			AutoKickDelay:      30,
+			RecordEnabled:      false,
+			RecordStatus:       model.RecordStatusIdle,
+			CreatedBy:          admin.ID,
+		}
+
+		if err := db.Create(stream).Error; err != nil {
 			return err
 		}
+
 		logger.Debug("debug mode: created stream",
 			zap.String("name", s.name),
 			zap.String("stream_key", s.streamKey),

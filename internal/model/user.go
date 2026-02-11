@@ -4,16 +4,21 @@ import "time"
 
 // User 用户信息
 type User struct {
-	ID           int64      `json:"id" db:"id"`
-	Username     string     `json:"username" db:"username"`
-	PasswordHash string     `json:"-" db:"password_hash"`
-	Email        *string    `json:"email" db:"email"`
-	Phone        *string    `json:"phone" db:"phone"`
-	RealName     *string    `json:"real_name" db:"real_name"`
-	Avatar       *string    `json:"avatar" db:"avatar"`
-	LastLoginAt  *time.Time `json:"last_login_at" db:"last_login_at"`
-	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
+	ID           int64      `json:"id" db:"id" gorm:"column:id;primaryKey"`
+	Username     string     `json:"username" db:"username" gorm:"column:username;uniqueIndex;not null"`
+	PasswordHash string     `json:"-" db:"password_hash" gorm:"column:password_hash;not null"`
+	Email        *string    `json:"email" db:"email" gorm:"column:email"`
+	Phone        *string    `json:"phone" db:"phone" gorm:"column:phone"`
+	RealName     *string    `json:"real_name" db:"real_name" gorm:"column:real_name"`
+	Avatar       *string    `json:"avatar" db:"avatar" gorm:"column:avatar"`
+	LastLoginAt  *time.Time `json:"last_login_at" db:"last_login_at" gorm:"column:last_login_at"`
+	CreatedAt    time.Time  `json:"created_at" db:"created_at" gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
+}
+
+// TableName 指定表名
+func (User) TableName() string {
+	return "users"
 }
 
 // LoginRequest 登录请求

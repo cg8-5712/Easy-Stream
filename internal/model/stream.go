@@ -70,39 +70,44 @@ func (a RecordFileArray) Value() (driver.Value, error) {
 
 // Stream 推流信息
 type Stream struct {
-	ID          int64   `json:"id" db:"id"`
-	StreamKey   string  `json:"stream_key" db:"stream_key"`
-	Name        string  `json:"name" db:"name"`
-	Description *string `json:"description" db:"description"`
-	DeviceID    *string `json:"device_id" db:"device_id"`
-	Status      string  `json:"status" db:"status"`         // idle / pushing / ended
-	Visibility  string  `json:"visibility" db:"visibility"` // public / private
+	ID          int64   `json:"id" db:"id" gorm:"column:id;primaryKey"`
+	StreamKey   string  `json:"stream_key" db:"stream_key" gorm:"column:stream_key;uniqueIndex;not null"`
+	Name        string  `json:"name" db:"name" gorm:"column:name;not null"`
+	Description *string `json:"description" db:"description" gorm:"column:description"`
+	DeviceID    *string `json:"device_id" db:"device_id" gorm:"column:device_id;index"`
+	Status      string  `json:"status" db:"status" gorm:"column:status;default:'idle';index"`         // idle / pushing / ended
+	Visibility  string  `json:"visibility" db:"visibility" gorm:"column:visibility;default:'public';index"` // public / private
 	// 分享码相关字段
-	ShareCode          *string         `json:"share_code,omitempty" db:"share_code"`             // 分享码（私有直播自动生成）
-	ShareCodeMaxUses   int             `json:"share_code_max_uses" db:"share_code_max_uses"`     // 分享码最大使用次数（0表示无限制）
-	ShareCodeUsedCount int             `json:"share_code_used_count" db:"share_code_used_count"` // 分享码已使用次数
-	RecordEnabled      bool            `json:"record_enabled" db:"record_enabled"`               // 是否开启录制
-	RecordStatus       string          `json:"record_status" db:"record_status"`                 // 录制状态: idle / recording / stopped / failed
-	RecordFiles        RecordFileArray `json:"record_files" db:"record_files"`                   // 录制文件列表（包含元数据）
-	Protocol           *string         `json:"protocol" db:"protocol"`
-	Bitrate            *int            `json:"bitrate" db:"bitrate"`
-	FPS                *int            `json:"fps" db:"fps"`
-	StreamerName       *string         `json:"streamer_name" db:"streamer_name"`               // 直播人员姓名
-	StreamerContact    *string         `json:"streamer_contact" db:"streamer_contact"`         // 直播人员联系方式
-	ScheduledStartTime *time.Time      `json:"scheduled_start_time" db:"scheduled_start_time"` // 预计开始时间
-	ScheduledEndTime   *time.Time      `json:"scheduled_end_time" db:"scheduled_end_time"`     // 预计结束时间
-	AutoKickDelay      int             `json:"auto_kick_delay" db:"auto_kick_delay"`           // 超过预计结束时间后，无推流多久自动结束（分钟）
-	ActualStartTime    *time.Time      `json:"actual_start_time" db:"actual_start_time"`       // 实际开始时间
-	ActualEndTime      *time.Time      `json:"actual_end_time" db:"actual_end_time"`           // 实际结束时间
-	LastUnpublishAt    *time.Time      `json:"last_unpublish_at" db:"last_unpublish_at"`       // 最后断流时间
-	LastFrameAt        *time.Time      `json:"last_frame_at" db:"last_frame_at"`
+	ShareCode          *string         `json:"share_code,omitempty" db:"share_code" gorm:"column:share_code;uniqueIndex:idx_streams_share_code,where:share_code IS NOT NULL"`             // 分享码（私有直播自动生成）
+	ShareCodeMaxUses   int             `json:"share_code_max_uses" db:"share_code_max_uses" gorm:"column:share_code_max_uses;default:0"`     // 分享码最大使用次数（0表示无限制）
+	ShareCodeUsedCount int             `json:"share_code_used_count" db:"share_code_used_count" gorm:"column:share_code_used_count;default:0"` // 分享码已使用次数
+	RecordEnabled      bool            `json:"record_enabled" db:"record_enabled" gorm:"column:record_enabled;default:false;index"`               // 是否开启录制
+	RecordStatus       string          `json:"record_status" db:"record_status" gorm:"column:record_status;default:'idle'"`                 // 录制状态: idle / recording / stopped / failed
+	RecordFiles        RecordFileArray `json:"record_files" db:"record_files" gorm:"column:record_files;type:jsonb;default:'[]'"`                   // 录制文件列表（包含元数据）
+	Protocol           *string         `json:"protocol" db:"protocol" gorm:"column:protocol"`
+	Bitrate            *int            `json:"bitrate" db:"bitrate" gorm:"column:bitrate;default:0"`
+	FPS                *int            `json:"fps" db:"fps" gorm:"column:fps;default:0"`
+	StreamerName       *string         `json:"streamer_name" db:"streamer_name" gorm:"column:streamer_name;not null"`               // 直播人员姓名
+	StreamerContact    *string         `json:"streamer_contact" db:"streamer_contact" gorm:"column:streamer_contact"`         // 直播人员联系方式
+	ScheduledStartTime *time.Time      `json:"scheduled_start_time" db:"scheduled_start_time" gorm:"column:scheduled_start_time;not null;index"` // 预计开始时间
+	ScheduledEndTime   *time.Time      `json:"scheduled_end_time" db:"scheduled_end_time" gorm:"column:scheduled_end_time;not null;index"`     // 预计结束时间
+	AutoKickDelay      int             `json:"auto_kick_delay" db:"auto_kick_delay" gorm:"column:auto_kick_delay;default:30"`           // 超过预计结束时间后，无推流多久自动结束（分钟）
+	ActualStartTime    *time.Time      `json:"actual_start_time" db:"actual_start_time" gorm:"column:actual_start_time"`       // 实际开始时间
+	ActualEndTime      *time.Time      `json:"actual_end_time" db:"actual_end_time" gorm:"column:actual_end_time"`           // 实际结束时间
+	LastUnpublishAt    *time.Time      `json:"last_unpublish_at" db:"last_unpublish_at" gorm:"column:last_unpublish_at"`       // 最后断流时间
+	LastFrameAt        *time.Time      `json:"last_frame_at" db:"last_frame_at" gorm:"column:last_frame_at"`
 	// 观看统计
-	CurrentViewers int       `json:"current_viewers" db:"current_viewers"` // 当前观看人数
-	TotalViewers   int       `json:"total_viewers" db:"total_viewers"`     // 累计观看人次
-	PeakViewers    int       `json:"peak_viewers" db:"peak_viewers"`       // 峰值观看人数
-	CreatedBy      int64     `json:"created_by" db:"created_by"`           // 创建者用户ID
-	CreatedAt      time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at" db:"updated_at"`
+	CurrentViewers int       `json:"current_viewers" db:"current_viewers" gorm:"column:current_viewers;default:0"` // 当前观看人数
+	TotalViewers   int       `json:"total_viewers" db:"total_viewers" gorm:"column:total_viewers;default:0"`     // 累计观看人次
+	PeakViewers    int       `json:"peak_viewers" db:"peak_viewers" gorm:"column:peak_viewers;default:0"`       // 峰值观看人数
+	CreatedBy      int64     `json:"created_by" db:"created_by" gorm:"column:created_by;index"`           // 创建者用户ID
+	CreatedAt      time.Time `json:"created_at" db:"created_at" gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt      time.Time `json:"updated_at" db:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
+}
+
+// TableName 指定表名
+func (Stream) TableName() string {
+	return "streams"
 }
 
 // StreamStatus 流状态常量
