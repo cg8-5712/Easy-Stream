@@ -78,28 +78,28 @@ jobs:
               cp ../config.example.yaml "${base_name}/"
 
               # 创建 README
-              cat > "${base_name}/README.txt" << 'EOF'
-Easy-Stream - 流媒体管理系统
-================================
+              cat > "${base_name}/README.txt" <<'EOFREADME'
+          Easy-Stream - 流媒体管理系统
+          ================================
 
-快速开始：
-1. 复制 config.example.yaml 为 config.yaml
-2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
-3. 运行 easy-stream-*.exe
+          快速开始：
+          1. 复制 config.example.yaml 为 config.yaml
+          2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
+          3. 运行 easy-stream-*.exe
 
-配置说明：
-- 必须配置：数据库连接、Redis 连接、JWT secret
-- ZLMediaKit 配置：确保 hookBaseURL 指向本服务地址
-- 存储配置：默认使用本地存储，可选配置 S3/COS/OSS
+          配置说明：
+          - 必须配置：数据库连接、Redis 连接、JWT secret
+          - ZLMediaKit 配置：确保 hookBaseURL 指向本服务地址
+          - 存储配置：默认使用本地存储，可选配置 S3/COS/OSS
 
-环境变量支持：
-可以通过环境变量覆盖配置，例如：
-  DATABASE_HOST=localhost
-  REDIS_PORT=6379
-  JWT_SECRET=your-secret
+          环境变量支持：
+          可以通过环境变量覆盖配置，例如：
+            DATABASE_HOST=localhost
+            REDIS_PORT=6379
+            JWT_SECRET=your-secret
 
-更多信息：https://github.com/your-repo/Easy-Stream
-EOF
+          更多信息：https://github.com/cg8-5712/Easy-Stream
+          EOFREADME
 
               zip -r "${base_name}.zip" "${base_name}"
               rm -rf "${base_name}"
@@ -111,29 +111,29 @@ EOF
               cp ../config.example.yaml "${base_name}/"
 
               # 创建 README
-              cat > "${base_name}/README.txt" << 'EOF'
-Easy-Stream - 流媒体管理系统
-================================
+              cat > "${base_name}/README.txt" <<'EOFREADME'
+          Easy-Stream - 流媒体管理系统
+          ================================
 
-快速开始：
-1. 复制 config.example.yaml 为 config.yaml
-2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
-3. 添加执行权限：chmod +x easy-stream-*
-4. 运行：./easy-stream-*
+          快速开始：
+          1. 复制 config.example.yaml 为 config.yaml
+          2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
+          3. 添加执行权限：chmod +x easy-stream-*
+          4. 运行：./easy-stream-*
 
-配置说明：
-- 必须配置：数据库连接、Redis 连接、JWT secret
-- ZLMediaKit 配置：确保 hookBaseURL 指向本服务地址
-- 存储配置：默认使用本地存储，可选配置 S3/COS/OSS
+          配置说明：
+          - 必须配置：数据库连接、Redis 连接、JWT secret
+          - ZLMediaKit 配置：确保 hookBaseURL 指向本服务地址
+          - 存储配置：默认使用本地存储，可选配置 S3/COS/OSS
 
-环境变量支持：
-可以通过环境变量覆盖配置，例如：
-  export DATABASE_HOST=localhost
-  export REDIS_PORT=6379
-  export JWT_SECRET=your-secret
+          环境变量支持：
+          可以通过环境变量覆盖配置，例如：
+            export DATABASE_HOST=localhost
+            export REDIS_PORT=6379
+            export JWT_SECRET=your-secret
 
-更多信息：https://github.com/your-repo/Easy-Stream
-EOF
+          更多信息：https://github.com/cg8-5712/Easy-Stream
+          EOFREADME
 
               tar -czf "${base_name}.tar.gz" "${base_name}"
               rm -rf "${base_name}"
