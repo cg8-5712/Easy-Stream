@@ -125,6 +125,7 @@ jobs:
             local arch=$2
             local binary="easy-stream-${VERSION}-${os}-${arch}"
             local pkg_dir="pkg-${os}-${arch}"
+            local output="${binary}.tar.gz"
 
             echo "Packaging ${os}/${arch}..."
 
@@ -139,15 +140,17 @@ jobs:
             cp ../config.example.yaml "$pkg_dir/"
             cp /tmp/readme-unix.txt "$pkg_dir/README.txt"
 
-            tar -czf "${binary}.tar.gz" -C "$pkg_dir" .
+            tar -czf "$output" -C "$pkg_dir" .
             rm -rf "$pkg_dir"
-            echo "Created ${binary}.tar.gz"
+            rm -f "$binary"
+            echo "Created $output"
           }
 
           package_windows() {
             local arch=$1
             local binary="easy-stream-${VERSION}-windows-${arch}.exe"
             local pkg_dir="pkg-windows-${arch}"
+            local output="easy-stream-${VERSION}-windows-${arch}.zip"
 
             echo "Packaging windows/${arch}..."
 
@@ -162,9 +165,10 @@ jobs:
             cp ../config.example.yaml "$pkg_dir/"
             cp /tmp/readme-windows.txt "$pkg_dir/README.txt"
 
-            zip -rj "easy-stream-${VERSION}-windows-${arch}.zip" "$pkg_dir"
+            zip -rj "$output" "$pkg_dir"
             rm -rf "$pkg_dir"
-            echo "Created easy-stream-${VERSION}-windows-${arch}.zip"
+            rm -f "$binary"
+            echo "Created $output"
           }
 
           package_unix linux amd64
@@ -172,8 +176,6 @@ jobs:
           package_unix darwin amd64
           package_unix darwin arm64
           package_windows amd64
-
-          rm -f easy-stream-*-linux-* easy-stream-*-darwin-* easy-stream-*.exe 2>/dev/null || true
 
           echo "Packages created:"
           ls -la
