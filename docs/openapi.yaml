@@ -93,7 +93,7 @@ components:
           description: 可见性
         share_code:
           type: string
-          description: 分享码（私有直播自动生成，8位）
+          description: 分享码（私有直播自动生成，6位）
         share_code_max_uses:
           type: integer
           description: 分享码最大使用次数（0表示不限制）

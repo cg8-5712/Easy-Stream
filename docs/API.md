@@ -239,7 +239,7 @@ GET /api/v1/streams?time_range=past&page=1&pageSize=20
 GET /api/v1/streams?access_token=xyz789abc123...  (游客携带访问令牌)
 ```
 
-**游客响应示例** (200 OK) - 不含 stream_key
+**游客响应示例** (200 OK) - 不含 stream_key 和敏感信息
 ```json
 {
   "total": 100,
@@ -248,26 +248,19 @@ GET /api/v1/streams?access_token=xyz789abc123...  (游客携带访问令牌)
       "id": 1,
       "name": "技术分享会",
       "description": "每周技术分享直播",
-      "device_id": "camera-001",
       "status": "pushing",
       "visibility": "public",
       "record_enabled": true,
-      "record_files": ["/recordings/2024/01/01/abc123def456_001.mp4"],
-      "protocol": "rtmp",
-      "bitrate": 2500,
-      "fps": 30,
+      "record_status": "idle",
       "streamer_name": "张三",
       "streamer_contact": "13800138000",
       "scheduled_start_time": "2024-01-01T14:00:00Z",
       "scheduled_end_time": "2024-01-01T16:00:00Z",
-      "auto_kick_delay": 30,
       "actual_start_time": "2024-01-01T14:05:00Z",
       "actual_end_time": null,
-      "last_frame_at": "2024-01-01T15:30:00Z",
       "current_viewers": 128,
       "total_viewers": 1520,
       "peak_viewers": 256,
-      "created_by": 1,
       "created_at": "2024-01-01T10:00:00Z",
       "updated_at": "2024-01-01T14:05:00Z"
     }
@@ -313,7 +306,7 @@ GET /api/v1/streams/view/:id
 |--------|------|------|------|
 | access_token | string | 否 | 私有直播访问令牌（游客访问私有直播时必填） |
 
-**游客响应示例** (200 OK) - 不含 stream_key
+**游客响应示例** (200 OK) - 不含 stream_key 和敏感信息
 ```json
 {
   "id": 1,
@@ -321,7 +314,19 @@ GET /api/v1/streams/view/:id
   "description": "每周技术分享直播",
   "status": "pushing",
   "visibility": "public",
-  ...
+  "record_enabled": true,
+  "record_status": "idle",
+  "streamer_name": "张三",
+  "streamer_contact": "13800138000",
+  "scheduled_start_time": "2024-01-01T14:00:00Z",
+  "scheduled_end_time": "2024-01-01T16:00:00Z",
+  "actual_start_time": "2024-01-01T14:05:00Z",
+  "actual_end_time": null,
+  "current_viewers": 128,
+  "total_viewers": 1520,
+  "peak_viewers": 256,
+  "created_at": "2024-01-01T10:00:00Z",
+  "updated_at": "2024-01-01T14:05:00Z"
 }
 ```
 
@@ -929,11 +934,12 @@ Authorization: Bearer {access_token}
 **响应示例** (200 OK)
 ```json
 {
-  "share_links": [
+  "total": 1,
+  "links": [
     {
       "id": 1,
       "stream_key": "test-stream-004",
-      "token": "abc123xyz789...",
+      "token": "abc123xyz789def456...",
       "max_uses": 100,
       "used_count": 25,
       "created_by": 1,
@@ -980,12 +986,10 @@ Authorization: Bearer {access_token}
 ```json
 {
   "id": 1,
-  "stream_key": "test-stream-004",
-  "token": "abc123xyz789...",
+  "token": "abc123xyz789def456...",
+  "share_url": "/share/abc123xyz789def456...",
   "max_uses": 100,
-  "used_count": 0,
-  "created_by": 1,
-  "created_at": "2024-01-01T10:00:00Z"
+  "used_count": 0
 }
 ```
 
@@ -1471,7 +1475,7 @@ POST /api/v1/hooks/on_player_disconnect
   device_id: string             // 设备 ID
   status: string                // 状态: idle / pushing / ended
   visibility: string            // 可见性: public / private
-  share_code: string            // 分享码（私有直播自动生成，8位）
+  share_code: string            // 分享码（私有直播自动生成，6位）
   share_code_max_uses: number   // 分享码最大使用次数（0表示不限制）
   share_code_used_count: number // 分享码已使用次数
   record_enabled: boolean       // 是否开启录制
