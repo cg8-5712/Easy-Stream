@@ -191,6 +191,7 @@ func main() {
 		{
 			hooks.POST("/on_publish", hookHandler.OnPublish)
 			hooks.POST("/on_unpublish", hookHandler.OnUnpublish)
+			hooks.POST("/on_stream_changed", hookHandler.OnStreamChanged)
 			hooks.POST("/on_flow_report", hookHandler.OnFlowReport)
 			hooks.POST("/on_stream_none_reader", hookHandler.OnStreamNoneReader)
 			hooks.POST("/on_play", hookHandler.OnPlay)

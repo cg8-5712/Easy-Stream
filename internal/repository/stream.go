@@ -139,6 +139,9 @@ func (r *StreamRepository) GetIdleStreams() ([]*model.Stream, error) {
 
 // IncrementViewers 增加观看人数（有人进入观看）
 // 使用原生 SQL 保证原子性
+// current_viewers: 当前在线人数 +1
+// total_viewers: 累计观看人次 +1
+// peak_viewers: 如果当前人数超过历史峰值则更新
 func (r *StreamRepository) IncrementViewers(key string) error {
 	return r.db.Exec(`
 		UPDATE streams SET

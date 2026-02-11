@@ -7,8 +7,10 @@ import (
 	"easy-stream/internal/model"
 	"easy-stream/internal/service"
 	"easy-stream/internal/storage"
+	"easy-stream/pkg/logger"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type HookHandler struct {
@@ -58,6 +60,10 @@ func (h *HookHandler) OnUnpublish(c *gin.Context) {
 		return
 	}
 
+	logger.Info("OnUnpublish hook called",
+		zap.String("app", req.App),
+		zap.String("stream", req.Stream))
+
 	h.streamSvc.OnUnpublish(&req)
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
 }
@@ -94,6 +100,11 @@ func (h *HookHandler) OnPlay(c *gin.Context) {
 		return
 	}
 
+	logger.Info("OnPlay hook called",
+		zap.String("app", req.App),
+		zap.String("stream", req.Stream),
+		zap.String("id", req.ID))
+
 	h.streamSvc.OnPlay(&req)
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
 }
@@ -106,7 +117,40 @@ func (h *HookHandler) OnPlayerDisconnect(c *gin.Context) {
 		return
 	}
 
+	logger.Info("OnPlayerDisconnect hook called",
+		zap.String("app", req.App),
+		zap.String("stream", req.Stream),
+		zap.String("id", req.ID))
+
 	h.streamSvc.OnPlayerDisconnect(&req)
+	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
+}
+
+// OnStreamChanged 流注册/注销回调
+func (h *HookHandler) OnStreamChanged(c *gin.Context) {
+	var req model.OnStreamChangedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: err.Error()})
+		return
+	}
+
+	logger.Info("OnStreamChanged hook called",
+		zap.String("app", req.App),
+		zap.String("stream", req.Stream),
+		zap.Bool("regist", req.Regist))
+
+	// regist=false 表示推流结束
+	if !req.Regist {
+		// 转换为 OnUnpublish 请求
+		unpublishReq := &model.OnUnpublishRequest{
+			App:        req.App,
+			Stream:     req.Stream,
+			Schema:     req.Schema,
+			MediaSrvID: req.MediaSrvID,
+		}
+		h.streamSvc.OnUnpublish(unpublishReq)
+	}
+
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
 }
 

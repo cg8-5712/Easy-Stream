@@ -65,6 +65,17 @@ type OnPlayerDisconnectRequest struct {
 	ID         string `json:"id"` // 播放器唯一标识
 }
 
+// OnStreamChangedRequest 流注册/注销回调
+type OnStreamChangedRequest struct {
+	App        string `json:"app"`
+	Stream     string `json:"stream"`
+	Schema     string `json:"schema"`
+	MediaSrvID string `json:"mediaServerId"`
+	Regist     bool   `json:"regist"` // true=注册(推流开始), false=注销(推流结束)
+	OriginType int    `json:"originType"` // 流来源类型
+	OriginURL  string `json:"originUrl"`  // 流来源URL
+}
+
 // OnRecordMP4Request 录制完成回调
 type OnRecordMP4Request struct {
 	App        string  `json:"app"`

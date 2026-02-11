@@ -622,6 +622,7 @@ func (s *StreamService) OnPlayerDisconnect(req *model.OnPlayerDisconnectRequest)
 }
 
 // OnFlowReport 处理流量统计回调
+// 当播放器或推流者断开连接时会触发此回调
 func (s *StreamService) OnFlowReport(req *model.OnFlowReportRequest) error {
 	_, err := s.streamRepo.GetByKey(req.Stream)
 	if err != nil {
@@ -630,7 +631,15 @@ func (s *StreamService) OnFlowReport(req *model.OnFlowReportRequest) error {
 		}
 		return err
 	}
-	// 可以在这里更新码率等信息
+
+	// Player=true 表示是播放者，断开时减少观看人数
+	if req.Player {
+		logger.Info("player disconnected via flow report",
+			zap.String("stream", req.Stream),
+			zap.Int64("totalBytes", req.TotalBytes))
+		return s.streamRepo.DecrementViewers(req.Stream)
+	}
+
 	return nil
 }
 
