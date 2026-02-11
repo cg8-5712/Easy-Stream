@@ -21,7 +21,7 @@ func (r *UserRepository) GetByUsername(username string) (*model.User, error) {
 	var user model.User
 	err := r.db.Where("username = ?", username).First(&user).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, nil
+		return nil, ErrUserNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func (r *UserRepository) GetByID(id int64) (*model.User, error) {
 	var user model.User
 	err := r.db.First(&user, id).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, nil
+		return nil, ErrUserNotFound
 	}
 	if err != nil {
 		return nil, err

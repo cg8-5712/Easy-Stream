@@ -24,7 +24,7 @@ func (r *ShareLinkRepository) GetByToken(token string) (*model.ShareLink, error)
 	var link model.ShareLink
 	err := r.db.Where("token = ?", token).First(&link).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, nil
+		return nil, ErrShareLinkNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (r *ShareLinkRepository) GetByID(id int64) (*model.ShareLink, error) {
 	var link model.ShareLink
 	err := r.db.First(&link, id).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, nil
+		return nil, ErrShareLinkNotFound
 	}
 	if err != nil {
 		return nil, err

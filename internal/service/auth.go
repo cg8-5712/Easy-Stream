@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -32,10 +33,10 @@ func NewAuthService(userRepo *repository.UserRepository, redisRepo *repository.R
 func (s *AuthService) Login(username, password string) (*model.LoginResponse, error) {
 	user, err := s.userRepo.GetByUsername(username)
 	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return nil, ErrInvalidCredentials
+		}
 		return nil, err
-	}
-	if user == nil {
-		return nil, ErrInvalidCredentials
 	}
 
 	// 验证密码
@@ -84,10 +85,10 @@ func (s *AuthService) RefreshToken(refreshToken string) (*model.RefreshTokenResp
 	// 获取用户信息
 	user, err := s.userRepo.GetByID(userID)
 	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return nil, ErrInvalidToken
+		}
 		return nil, err
-	}
-	if user == nil {
-		return nil, ErrInvalidToken
 	}
 
 	// 生成新的 Access Token

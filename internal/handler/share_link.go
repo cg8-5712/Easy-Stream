@@ -97,6 +97,12 @@ func (h *ShareLinkHandler) UpdateMaxUses(c *gin.Context) {
 		return
 	}
 
+	// 验证 MaxUses 的合法性
+	if req.MaxUses < 0 || req.MaxUses > 10000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "max_uses must be between 0 and 10000"})
+		return
+	}
+
 	link, err := h.shareLinkSvc.UpdateMaxUses(id, req.MaxUses)
 	if err != nil {
 		if err == service.ErrShareLinkNotFound {

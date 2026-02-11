@@ -24,8 +24,16 @@ func (h *StreamHandler) List(c *gin.Context) {
 	visibility := c.Query("visibility")
 	timeRange := c.Query("time_range")
 	accessToken := c.Query("access_token")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+
+	// 验证分页参数
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	pageSize, err := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	if err != nil || pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
 
 	// 检查用户是否已登录
 	_, isLoggedIn := c.Get("user_id")
@@ -65,6 +73,18 @@ func (h *StreamHandler) Create(c *gin.Context) {
 	var req model.CreateStreamRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 验证 ShareCodeMaxUses
+	if req.ShareCodeMaxUses != nil && (*req.ShareCodeMaxUses < 0 || *req.ShareCodeMaxUses > 10000) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "share_code_max_uses must be between 0 and 10000"})
+		return
+	}
+
+	// 验证 AutoKickDelay
+	if req.AutoKickDelay < 0 || req.AutoKickDelay > 1440 { // 最多24小时
+		c.JSON(http.StatusBadRequest, gin.H{"error": "auto_kick_delay must be between 0 and 1440 minutes"})
 		return
 	}
 

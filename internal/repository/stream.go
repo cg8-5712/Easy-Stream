@@ -27,7 +27,7 @@ func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 	var stream model.Stream
 	err := r.db.Where("stream_key = ?", key).First(&stream).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, nil
+		return nil, ErrStreamNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 	var stream model.Stream
 	err := r.db.First(&stream, id).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, nil
+		return nil, ErrStreamNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -190,7 +190,7 @@ func (r *StreamRepository) GetByShareCode(shareCode string) (*model.Stream, erro
 	var stream model.Stream
 	err := r.db.Where("share_code = ?", shareCode).First(&stream).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, nil
+		return nil, ErrStreamNotFound
 	}
 	if err != nil {
 		return nil, err

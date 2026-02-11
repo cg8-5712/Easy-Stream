@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -86,10 +87,10 @@ func (s *StreamService) Create(req *model.CreateStreamRequest, userID int64) (*m
 func (s *StreamService) Get(key string, isLoggedIn bool, accessToken string) (*model.Stream, error) {
 	stream, err := s.streamRepo.GetByKey(key)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	// 登录用户可以查看所有直播
@@ -149,7 +150,7 @@ func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool, acce
 			logger.Debug("retrieved private stream",
 				zap.Bool("stream_found", privateStream != nil),
 				zap.Error(err))
-			if err == nil && privateStream != nil {
+			if err == nil {
 				logger.Debug("checking private stream status",
 					zap.String("status", string(privateStream.Status)))
 				// 只要不是已结束的直播就可以显示
@@ -170,6 +171,10 @@ func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool, acce
 							zap.Int64("stream_id", privateStream.ID))
 					}
 				}
+			} else if !errors.Is(err, repository.ErrStreamNotFound) {
+				logger.Error("failed to get private stream",
+					zap.String("stream_key", streamKey),
+					zap.Error(err))
 			}
 		}
 	}
@@ -184,10 +189,10 @@ func (s *StreamService) List(req *model.StreamListRequest, isLoggedIn bool, acce
 func (s *StreamService) GetByID(id int64) (*model.Stream, error) {
 	stream, err := s.streamRepo.GetByID(id)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 	return stream, nil
 }
@@ -201,10 +206,10 @@ func (s *StreamService) VerifyAccessToken(streamKey, accessToken string) (bool, 
 func (s *StreamService) Update(key string, req *model.UpdateStreamRequest) (*model.Stream, error) {
 	stream, err := s.streamRepo.GetByKey(key)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	// 更新字段
@@ -291,10 +296,10 @@ func (s *StreamService) Delete(key string) error {
 func (s *StreamService) Kick(key string) error {
 	stream, err := s.streamRepo.GetByKey(key)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return ErrStreamNotFound
+		}
 		return err
-	}
-	if stream == nil {
-		return ErrStreamNotFound
 	}
 
 	// 调用 ZLMediaKit 踢流
@@ -314,10 +319,10 @@ func (s *StreamService) Kick(key string) error {
 func (s *StreamService) End(key string) error {
 	stream, err := s.streamRepo.GetByKey(key)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return ErrStreamNotFound
+		}
 		return err
-	}
-	if stream == nil {
-		return ErrStreamNotFound
 	}
 
 	// 如果正在推流，先断流
@@ -333,52 +338,32 @@ func (s *StreamService) End(key string) error {
 func (s *StreamService) endStreamInternal(stream *model.Stream) error {
 	streamKey := stream.StreamKey
 
-	// 清理 Redis 中的访问令牌（分享码和分享链接生成的令牌）
+	// 在事务中执行数据库操作
+	if err := s.streamRepo.EndStreamTx(stream, s.shareLinkRepo); err != nil {
+		logger.Error("failed to end stream in transaction",
+			zap.String("stream_key", streamKey),
+			zap.Error(err))
+		return err
+	}
+
+	// 事务成功后，清理 Redis（即使失败也不影响主流程）
 	if err := s.redisRepo.DeleteStreamAccessTokens(streamKey); err != nil {
-		logger.Warn("failed to delete access tokens for stream",
+		logger.Warn("failed to delete access tokens from redis",
 			zap.String("stream_key", streamKey),
 			zap.Error(err))
 	}
 
-	// 清理分享码
-	if stream.ShareCode != nil {
-		if err := s.streamRepo.DeleteShareCode(streamKey); err != nil {
-			logger.Warn("failed to delete share code for stream",
-				zap.String("stream_key", streamKey),
-				zap.Error(err))
-		}
-	}
-
-	// 清理分享链接
-	if err := s.shareLinkRepo.DeleteByStreamKey(streamKey); err != nil {
-		logger.Warn("failed to delete share links for stream",
-			zap.String("stream_key", streamKey),
-			zap.Error(err))
-	}
-
-	// 重置当前观看人数
-	s.streamRepo.ResetCurrentViewers(streamKey)
-
-	// 更新状态为已结束
-	now := time.Now()
-	stream.ActualEndTime = &now
-	stream.Status = model.StreamStatusEnded
-	stream.CurrentViewers = 0
-	stream.ShareCode = nil
-	stream.ShareCodeMaxUses = 0
-	stream.ShareCodeUsedCount = 0
-
-	return s.streamRepo.Update(stream)
+	return nil
 }
 
 // VerifyShareCode 验证分享码（游客）
 func (s *StreamService) VerifyShareCode(shareCode string) (*model.StreamAccessToken, error) {
 	stream, err := s.streamRepo.GetByShareCode(shareCode)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrInvalidShareCode
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrInvalidShareCode
 	}
 
 	// 检查直播是否已结束
@@ -418,10 +403,10 @@ func (s *StreamService) VerifyShareCode(shareCode string) (*model.StreamAccessTo
 func (s *StreamService) AddShareCode(streamKey string, maxUses int) (*model.Stream, error) {
 	stream, err := s.streamRepo.GetByKey(streamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	// 只有私有直播才能添加分享码
@@ -441,10 +426,10 @@ func (s *StreamService) AddShareCode(streamKey string, maxUses int) (*model.Stre
 func (s *StreamService) RegenerateShareCode(streamKey string, req *model.RegenerateShareCodeRequest) (*model.Stream, error) {
 	stream, err := s.streamRepo.GetByKey(streamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	// 只有私有直播才能生成分享码
@@ -469,10 +454,10 @@ func (s *StreamService) RegenerateShareCode(streamKey string, req *model.Regener
 func (s *StreamService) UpdateShareCodeMaxUses(streamKey string, maxUses int) (*model.Stream, error) {
 	stream, err := s.streamRepo.GetByKey(streamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	if stream.ShareCode == nil {
@@ -488,12 +473,12 @@ func (s *StreamService) UpdateShareCodeMaxUses(streamKey string, maxUses int) (*
 
 // DeleteShareCode 删除分享码（管理员）
 func (s *StreamService) DeleteShareCode(streamKey string) error {
-	stream, err := s.streamRepo.GetByKey(streamKey)
+	_, err := s.streamRepo.GetByKey(streamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return ErrStreamNotFound
+		}
 		return err
-	}
-	if stream == nil {
-		return ErrStreamNotFound
 	}
 
 	return s.streamRepo.DeleteShareCode(streamKey)
@@ -503,10 +488,10 @@ func (s *StreamService) DeleteShareCode(streamKey string) error {
 func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 	stream, err := s.streamRepo.GetByKey(req.Stream)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return ErrStreamNotFound
+		}
 		return err
-	}
-	if stream == nil {
-		return ErrStreamNotFound
 	}
 
 	// 检查流状态，已结束的流不允许再次推流
@@ -547,10 +532,10 @@ func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 	stream, err := s.streamRepo.GetByKey(req.Stream)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil
+		}
 		return err
-	}
-	if stream == nil {
-		return nil
 	}
 
 	// 如果开启了录制，停止录制
@@ -590,8 +575,11 @@ func (s *StreamService) OnPlayerDisconnect(req *model.OnPlayerDisconnectRequest)
 
 // OnFlowReport 处理流量统计回调
 func (s *StreamService) OnFlowReport(req *model.OnFlowReportRequest) error {
-	stream, err := s.streamRepo.GetByKey(req.Stream)
-	if err != nil || stream == nil {
+	_, err := s.streamRepo.GetByKey(req.Stream)
+	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil
+		}
 		return err
 	}
 	// 可以在这里更新码率等信息
@@ -667,10 +655,10 @@ func strPtr(s string) *string {
 func (s *StreamService) GetPlayURLs(streamKey string, isAdmin bool) (*model.PlayURLsResponse, error) {
 	stream, err := s.streamRepo.GetByKey(streamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	// 私有直播不允许游客访问
@@ -727,10 +715,10 @@ func (s *StreamService) WebRTCPush(streamKey, offerSDP string) (*model.WebRTCPla
 	// 1. 验证 stream_key 是否存在
 	stream, err := s.streamRepo.GetByKey(streamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	// 2. 检查直播状态（不能是已结束）

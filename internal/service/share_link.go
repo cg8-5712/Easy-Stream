@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"time"
 
 	"easy-stream/internal/model"
@@ -31,10 +32,10 @@ func NewShareLinkService(
 func (s *ShareLinkService) Create(streamKey string, req *model.CreateShareLinkRequest, userID int64) (*model.CreateShareLinkResponse, error) {
 	stream, err := s.streamRepo.GetByKey(streamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	// 只有私有直播才能创建分享链接
@@ -70,12 +71,12 @@ func (s *ShareLinkService) Create(streamKey string, req *model.CreateShareLinkRe
 
 // List 获取直播的所有分享链接（管理员）
 func (s *ShareLinkService) List(streamKey string) (*model.ShareLinkListResponse, error) {
-	stream, err := s.streamRepo.GetByKey(streamKey)
+	_, err := s.streamRepo.GetByKey(streamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	links, err := s.shareLinkRepo.ListByStreamKey(streamKey)
@@ -93,19 +94,19 @@ func (s *ShareLinkService) List(streamKey string) (*model.ShareLinkListResponse,
 func (s *ShareLinkService) VerifyToken(token string) (*model.StreamAccessToken, error) {
 	link, err := s.shareLinkRepo.GetByToken(token)
 	if err != nil {
+		if errors.Is(err, repository.ErrShareLinkNotFound) {
+			return nil, ErrInvalidShareLink
+		}
 		return nil, err
-	}
-	if link == nil {
-		return nil, ErrInvalidShareLink
 	}
 
 	// 获取关联的直播
 	stream, err := s.streamRepo.GetByKey(link.StreamKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil, ErrStreamNotFound
+		}
 		return nil, err
-	}
-	if stream == nil {
-		return nil, ErrStreamNotFound
 	}
 
 	// 检查直播是否已结束（分享链接的有效期）
@@ -144,12 +145,12 @@ func (s *ShareLinkService) VerifyToken(token string) (*model.StreamAccessToken, 
 
 // UpdateMaxUses 更新分享链接最大使用次数（管理员）
 func (s *ShareLinkService) UpdateMaxUses(linkID int64, maxUses int) (*model.ShareLink, error) {
-	link, err := s.shareLinkRepo.GetByID(linkID)
+	_, err := s.shareLinkRepo.GetByID(linkID)
 	if err != nil {
+		if errors.Is(err, repository.ErrShareLinkNotFound) {
+			return nil, ErrShareLinkNotFound
+		}
 		return nil, err
-	}
-	if link == nil {
-		return nil, ErrShareLinkNotFound
 	}
 
 	if err := s.shareLinkRepo.UpdateMaxUses(linkID, maxUses); err != nil {
@@ -161,12 +162,12 @@ func (s *ShareLinkService) UpdateMaxUses(linkID int64, maxUses int) (*model.Shar
 
 // Delete 删除分享链接（管理员）
 func (s *ShareLinkService) Delete(linkID int64) error {
-	link, err := s.shareLinkRepo.GetByID(linkID)
+	_, err := s.shareLinkRepo.GetByID(linkID)
 	if err != nil {
+		if errors.Is(err, repository.ErrShareLinkNotFound) {
+			return ErrShareLinkNotFound
+		}
 		return err
-	}
-	if link == nil {
-		return ErrShareLinkNotFound
 	}
 
 	return s.shareLinkRepo.Delete(linkID)
