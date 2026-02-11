@@ -113,14 +113,25 @@ jobs:
 
       - name: Create release packages
         run: |
+          set -e
           cd dist
           VERSION="${{ steps.version.outputs.VERSION }}"
+
+          echo "Files before packaging:"
+          ls -la
 
           package_unix() {
             local os=$1
             local arch=$2
             local binary="easy-stream-${VERSION}-${os}-${arch}"
             local pkg_dir="pkg-${os}-${arch}"
+
+            echo "Packaging ${os}/${arch}..."
+
+            if [ ! -f "$binary" ]; then
+              echo "Error: Binary $binary not found!"
+              exit 1
+            fi
 
             rm -rf "$pkg_dir"
             mkdir -p "$pkg_dir"
@@ -130,12 +141,20 @@ jobs:
 
             tar -czf "${binary}.tar.gz" -C "$pkg_dir" .
             rm -rf "$pkg_dir"
+            echo "Created ${binary}.tar.gz"
           }
 
           package_windows() {
             local arch=$1
             local binary="easy-stream-${VERSION}-windows-${arch}.exe"
             local pkg_dir="pkg-windows-${arch}"
+
+            echo "Packaging windows/${arch}..."
+
+            if [ ! -f "$binary" ]; then
+              echo "Error: Binary $binary not found!"
+              exit 1
+            fi
 
             rm -rf "$pkg_dir"
             mkdir -p "$pkg_dir"
@@ -145,6 +164,7 @@ jobs:
 
             zip -rj "easy-stream-${VERSION}-windows-${arch}.zip" "$pkg_dir"
             rm -rf "$pkg_dir"
+            echo "Created easy-stream-${VERSION}-windows-${arch}.zip"
           }
 
           package_unix linux amd64
@@ -153,7 +173,7 @@ jobs:
           package_unix darwin arm64
           package_windows amd64
 
-          rm -f easy-stream-*-linux-* easy-stream-*-darwin-* easy-stream-*.exe
+          rm -f easy-stream-*-linux-* easy-stream-*-darwin-* easy-stream-*.exe 2>/dev/null || true
 
           echo "Packages created:"
           ls -la
@@ -161,8 +181,15 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum *.tar.gz *.zip > checksums.txt
-          cat checksums.txt
+          echo "Files in dist:"
+          ls -la
+          if ls *.tar.gz *.zip 1> /dev/null 2>&1; then
+            sha256sum *.tar.gz *.zip > checksums.txt
+            cat checksums.txt
+          else
+            echo "Error: No package files found!"
+            exit 1
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
