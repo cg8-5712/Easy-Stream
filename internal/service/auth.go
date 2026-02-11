@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"easy-stream/internal/config"
+	"easy-stream/internal/constants"
 	"easy-stream/internal/model"
 	"easy-stream/internal/repository"
 
@@ -62,14 +63,14 @@ func (s *AuthService) Login(username, password string) (*model.LoginResponse, er
 	}
 
 	// 将 Refresh Token 存储到 Redis (7天过期)
-	if err := s.redisRepo.SetRefreshToken(user.ID, refreshToken, 7*24*time.Hour); err != nil {
+	if err := s.redisRepo.SetRefreshToken(user.ID, refreshToken, constants.RefreshTokenExpiry); err != nil {
 		return nil, err
 	}
 
 	return &model.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    2 * 60 * 60, // 2小时
+		ExpiresIn:    int64(constants.AccessTokenExpiry.Seconds()), // 转换为秒
 		User:         user,
 	}, nil
 }
@@ -105,14 +106,14 @@ func (s *AuthService) RefreshToken(refreshToken string) (*model.RefreshTokenResp
 
 	// 删除旧的 Refresh Token，存储新的
 	s.redisRepo.DeleteRefreshToken(refreshToken)
-	if err := s.redisRepo.SetRefreshToken(user.ID, newRefreshToken, 7*24*time.Hour); err != nil {
+	if err := s.redisRepo.SetRefreshToken(user.ID, newRefreshToken, constants.RefreshTokenExpiry); err != nil {
 		return nil, err
 	}
 
 	return &model.RefreshTokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
-		ExpiresIn:    2 * 60 * 60, // 2小时
+		ExpiresIn:    int64(constants.AccessTokenExpiry.Seconds()), // 转换为秒
 	}, nil
 }
 
@@ -132,7 +133,7 @@ func (s *AuthService) generateAccessToken(user *model.User) (string, error) {
 		"user_id":  user.ID,
 		"username": user.Username,
 		"type":     "access",
-		"exp":      time.Now().Add(2 * time.Hour).Unix(),
+		"exp":      time.Now().Add(constants.AccessTokenExpiry).Unix(),
 		"iat":      time.Now().Unix(),
 	}
 
@@ -143,7 +144,7 @@ func (s *AuthService) generateAccessToken(user *model.User) (string, error) {
 // generateRefreshToken 生成刷新令牌（长期）
 func (s *AuthService) generateRefreshToken(userID int64) (string, error) {
 	// 生成随机字符串
-	b := make([]byte, 32)
+	b := make([]byte, constants.TokenByteLength)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}

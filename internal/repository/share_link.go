@@ -22,27 +22,19 @@ func (r *ShareLinkRepository) Create(link *model.ShareLink) error {
 // GetByToken 根据 token 获取分享链接
 func (r *ShareLinkRepository) GetByToken(token string) (*model.ShareLink, error) {
 	var link model.ShareLink
-	err := r.db.Where("token = ?", token).First(&link).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, ErrShareLinkNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &link, nil
+	return &link, HandleNotFoundError(
+		r.db.Where("token = ?", token).First(&link).Error,
+		ErrShareLinkNotFound,
+	)
 }
 
 // GetByID 根据 ID 获取分享链接
 func (r *ShareLinkRepository) GetByID(id int64) (*model.ShareLink, error) {
 	var link model.ShareLink
-	err := r.db.First(&link, id).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, ErrShareLinkNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &link, nil
+	return &link, HandleNotFoundError(
+		r.db.First(&link, id).Error,
+		ErrShareLinkNotFound,
+	)
 }
 
 // ListByStreamKey 获取直播的所有分享链接

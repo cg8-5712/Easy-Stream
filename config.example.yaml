@@ -1,0 +1,90 @@
+# Easy-Stream 配置文件示例
+# 复制此文件为 config.yaml 并根据实际环境修改
+
+server:
+  host: "0.0.0.0"
+  port: "8080"
+  mode: "debug"  # debug 或 release
+
+database:
+  host: "localhost"
+  port: "5432"
+  user: "postgres"
+  password: "your-database-password"
+  dbname: "easystream"
+  sslmode: "disable"  # disable, require, verify-ca, verify-full
+
+redis:
+  host: "localhost"
+  port: "6379"
+  password: ""  # 如果 Redis 没有密码，留空
+  db: 0
+
+jwt:
+  secret: "your-jwt-secret-key-change-in-production"  # 生产环境必须修改
+
+zlmediakit:
+  host: "localhost"
+  port: "8080"
+  secret: "your-zlmediakit-secret"
+  # hookBaseURL: Easy-Stream 服务的回调地址（从 ZLMediaKit 视角能访问的地址）
+  # 例如: http://<easy-stream-ip>:<easy-stream-port>/api/v1/hooks
+  hookBaseURL: "http://localhost:8080/api/v1/hooks"
+  # httpPort: ZLMediaKit HTTP 端口，用于 HLS/FLV 播放
+  httpPort: "80"
+  # httpsPort: ZLMediaKit HTTPS 端口（可选）
+  httpsPort: "443"
+  # externalHost: 外部访问地址，用于生成播放 URL（公网 IP 或域名）
+  # 如果不配置，将使用 host 字段
+  externalHost: "localhost"
+  # webrtcPort: WebRTC 端口
+  webrtcPort: "8000"
+
+log:
+  level: "debug"  # debug, info, warn, error
+
+# 存储配置（支持多个存储目标）
+storage:
+  targets:
+    # 本地存储
+    - name: "local"
+      type: "local"
+      enabled: true
+      default: true
+      localDir: "./data/records"
+
+    # AWS S3 示例（取消注释启用）
+    # - name: "aws-s3"
+    #   type: "s3"
+    #   enabled: false
+    #   endpoint: ""  # 留空使用默认AWS端点
+    #   region: "us-east-1"
+    #   bucket: "your-bucket-name"
+    #   accessKeyId: "your-access-key"
+    #   secretAccessKey: "your-secret-key"
+    #   pathPrefix: "recordings"
+    #   customDomain: ""
+
+    # 腾讯云 COS 示例
+    # - name: "tencent-cos"
+    #   type: "cos"
+    #   enabled: false
+    #   endpoint: "https://cos.ap-guangzhou.myqcloud.com"
+    #   region: "ap-guangzhou"
+    #   bucket: "your-bucket-name"
+    #   accessKeyId: "your-secret-id"
+    #   secretAccessKey: "your-secret-key"
+    #   pathPrefix: "recordings"
+    #   customDomain: "https://your-cdn.example.com"
+
+    # 阿里云 OSS 示例
+    # - name: "aliyun-oss"
+    #   type: "oss"
+    #   enabled: false
+    #   endpoint: "https://oss-cn-hangzhou.aliyuncs.com"
+    #   region: "cn-hangzhou"
+    #   bucket: "your-bucket-name"
+    #   accessKeyId: "your-access-key-id"
+    #   secretAccessKey: "your-access-key-secret"
+    #   pathPrefix: "recordings"
+    #   customDomain: ""

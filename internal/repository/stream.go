@@ -25,27 +25,19 @@ func (r *StreamRepository) Create(stream *model.Stream) error {
 // GetByKey 根据 stream_key 获取
 func (r *StreamRepository) GetByKey(key string) (*model.Stream, error) {
 	var stream model.Stream
-	err := r.db.Where("stream_key = ?", key).First(&stream).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, ErrStreamNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &stream, nil
+	return &stream, HandleNotFoundError(
+		r.db.Where("stream_key = ?", key).First(&stream).Error,
+		ErrStreamNotFound,
+	)
 }
 
 // GetByID 根据 ID 获取
 func (r *StreamRepository) GetByID(id int64) (*model.Stream, error) {
 	var stream model.Stream
-	err := r.db.First(&stream, id).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, ErrStreamNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &stream, nil
+	return &stream, HandleNotFoundError(
+		r.db.First(&stream, id).Error,
+		ErrStreamNotFound,
+	)
 }
 
 // List 获取推流列表
@@ -99,10 +91,9 @@ func (r *StreamRepository) Update(stream *model.Stream) error {
 
 // UpdateStatus 更新状态
 func (r *StreamRepository) UpdateStatus(key, status string) error {
-	return r.db.Model(&model.Stream{}).Where("stream_key = ?", key).Updates(map[string]interface{}{
-		"status":     status,
-		"updated_at": time.Now(),
-	}).Error
+	return UpdateStreamByKeyWithTimestamp(r.db, key, map[string]interface{}{
+		"status": status,
+	})
 }
 
 // AppendRecordFile 追加录制文件（包含完整元数据）
@@ -120,18 +111,16 @@ func (r *StreamRepository) AppendRecordFile(key string, recordFile *model.Record
 
 // UpdateRecordEnabled 更新录制开关
 func (r *StreamRepository) UpdateRecordEnabled(key string, enabled bool) error {
-	return r.db.Model(&model.Stream{}).Where("stream_key = ?", key).Updates(map[string]interface{}{
+	return UpdateStreamByKeyWithTimestamp(r.db, key, map[string]interface{}{
 		"record_enabled": enabled,
-		"updated_at":     time.Now(),
-	}).Error
+	})
 }
 
 // UpdateRecordStatus 更新录制状态
 func (r *StreamRepository) UpdateRecordStatus(key, status string) error {
-	return r.db.Model(&model.Stream{}).Where("stream_key = ?", key).Updates(map[string]interface{}{
+	return UpdateStreamByKeyWithTimestamp(r.db, key, map[string]interface{}{
 		"record_status": status,
-		"updated_at":    time.Now(),
-	}).Error
+	})
 }
 
 // GetPushingStreams 获取所有正在推流的直播
@@ -174,10 +163,9 @@ func (r *StreamRepository) DecrementViewers(key string) error {
 
 // ResetCurrentViewers 重置当前观看人数（直播结束时调用）
 func (r *StreamRepository) ResetCurrentViewers(key string) error {
-	return r.db.Model(&model.Stream{}).Where("stream_key = ?", key).Updates(map[string]interface{}{
+	return UpdateStreamByKeyWithTimestamp(r.db, key, map[string]interface{}{
 		"current_viewers": 0,
-		"updated_at":      time.Now(),
-	}).Error
+	})
 }
 
 // Delete 删除推流
@@ -188,48 +176,40 @@ func (r *StreamRepository) Delete(key string) error {
 // GetByShareCode 根据分享码获取直播
 func (r *StreamRepository) GetByShareCode(shareCode string) (*model.Stream, error) {
 	var stream model.Stream
-	err := r.db.Where("share_code = ?", shareCode).First(&stream).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, ErrStreamNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &stream, nil
+	return &stream, HandleNotFoundError(
+		r.db.Where("share_code = ?", shareCode).First(&stream).Error,
+		ErrStreamNotFound,
+	)
 }
 
 // IncrementShareCodeUsedCount 增加分享码使用次数
 func (r *StreamRepository) IncrementShareCodeUsedCount(streamKey string) error {
-	return r.db.Model(&model.Stream{}).Where("stream_key = ?", streamKey).Updates(map[string]interface{}{
+	return UpdateStreamByKeyWithTimestamp(r.db, streamKey, map[string]interface{}{
 		"share_code_used_count": gorm.Expr("share_code_used_count + 1"),
-		"updated_at":            time.Now(),
-	}).Error
+	})
 }
 
 // UpdateShareCode 更新分享码（重新生成或添加分享码）
 func (r *StreamRepository) UpdateShareCode(streamKey, shareCode string, maxUses int) error {
-	return r.db.Model(&model.Stream{}).Where("stream_key = ?", streamKey).Updates(map[string]interface{}{
+	return UpdateStreamByKeyWithTimestamp(r.db, streamKey, map[string]interface{}{
 		"share_code":            shareCode,
 		"share_code_max_uses":   maxUses,
 		"share_code_used_count": 0,
-		"updated_at":            time.Now(),
-	}).Error
+	})
 }
 
 // UpdateShareCodeMaxUses 更新分享码最大使用次数（管理员调整）
 func (r *StreamRepository) UpdateShareCodeMaxUses(streamKey string, maxUses int) error {
-	return r.db.Model(&model.Stream{}).Where("stream_key = ?", streamKey).Updates(map[string]interface{}{
+	return UpdateStreamByKeyWithTimestamp(r.db, streamKey, map[string]interface{}{
 		"share_code_max_uses": maxUses,
-		"updated_at":          time.Now(),
-	}).Error
+	})
 }
 
 // DeleteShareCode 删除分享码
 func (r *StreamRepository) DeleteShareCode(streamKey string) error {
-	return r.db.Model(&model.Stream{}).Where("stream_key = ?", streamKey).Updates(map[string]interface{}{
+	return UpdateStreamByKeyWithTimestamp(r.db, streamKey, map[string]interface{}{
 		"share_code":            nil,
 		"share_code_max_uses":   0,
 		"share_code_used_count": 0,
-		"updated_at":            time.Now(),
-	}).Error
+	})
 }

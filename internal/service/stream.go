@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"easy-stream/internal/config"
+	"easy-stream/internal/constants"
 	"easy-stream/internal/model"
 	"easy-stream/internal/repository"
 	"easy-stream/internal/zlm"
@@ -541,7 +542,7 @@ func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 					// 录制失败，更新状态为 failed
 					s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
 				}
-			case <-time.After(30 * time.Second):
+			case <-time.After(constants.RecordOperationTimeout):
 				logger.Error("start record timeout",
 					zap.String("stream_key", req.Stream))
 				s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
@@ -592,7 +593,7 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 						zap.String("stream_key", req.Stream),
 						zap.Error(err))
 				}
-			case <-time.After(30 * time.Second):
+			case <-time.After(constants.RecordOperationTimeout):
 				logger.Error("stop record timeout",
 					zap.String("stream_key", req.Stream))
 			}
@@ -686,7 +687,7 @@ func (s *StreamService) generateShareCode() string {
 
 // generateAccessToken 生成访问令牌
 func (s *StreamService) generateAccessToken() (string, error) {
-	b := make([]byte, 32)
+	b := make([]byte, constants.TokenByteLength)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}

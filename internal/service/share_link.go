@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"easy-stream/internal/constants"
 	"easy-stream/internal/model"
 	"easy-stream/internal/repository"
 )
@@ -131,8 +132,8 @@ func (s *ShareLinkService) VerifyToken(token string) (*model.StreamAccessToken, 
 		return nil, err
 	}
 
-	expiresAt := time.Now().Add(2 * time.Hour)
-	if err := s.redisRepo.SetStreamAccessToken(stream.StreamKey, accessToken, 2*time.Hour); err != nil {
+	expiresAt := time.Now().Add(constants.AccessTokenExpiry)
+	if err := s.redisRepo.SetStreamAccessToken(stream.StreamKey, accessToken, constants.AccessTokenExpiry); err != nil {
 		return nil, err
 	}
 
@@ -175,7 +176,7 @@ func (s *ShareLinkService) Delete(linkID int64) error {
 
 // generateToken 生成 token
 func (s *ShareLinkService) generateToken() (string, error) {
-	b := make([]byte, 32)
+	b := make([]byte, constants.TokenByteLength)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}

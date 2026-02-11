@@ -19,27 +19,19 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 // GetByUsername 根据用户名获取用户
 func (r *UserRepository) GetByUsername(username string) (*model.User, error) {
 	var user model.User
-	err := r.db.Where("username = ?", username).First(&user).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, ErrUserNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return &user, HandleNotFoundError(
+		r.db.Where("username = ?", username).First(&user).Error,
+		ErrUserNotFound,
+	)
 }
 
 // GetByID 根据 ID 获取用户
 func (r *UserRepository) GetByID(id int64) (*model.User, error) {
 	var user model.User
-	err := r.db.First(&user, id).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, ErrUserNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return &user, HandleNotFoundError(
+		r.db.First(&user, id).Error,
+		ErrUserNotFound,
+	)
 }
 
 // UpdateLastLogin 更新最后登录时间
