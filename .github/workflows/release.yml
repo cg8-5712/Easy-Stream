@@ -1,0 +1,196 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        run: |
+          # 创建输出目录
+          mkdir -p dist
+
+          # 定义构建目标
+          platforms=(
+            "linux/amd64"
+            "linux/arm64"
+            "windows/amd64"
+            "darwin/amd64"
+            "darwin/arm64"
+          )
+
+          for platform in "${platforms[@]}"; do
+            GOOS=${platform%/*}
+            GOARCH=${platform#*/}
+
+            output_name="easy-stream-${{ steps.version.outputs.VERSION }}-${GOOS}-${GOARCH}"
+
+            if [ "$GOOS" = "windows" ]; then
+              output_name="${output_name}.exe"
+            fi
+
+            echo "Building for ${GOOS}/${GOARCH}..."
+
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+              -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
+              -o "dist/${output_name}" \
+              ./cmd/server
+
+            if [ $? -ne 0 ]; then
+              echo "Build failed for ${GOOS}/${GOARCH}"
+              exit 1
+            fi
+          done
+
+      - name: Create release packages
+        run: |
+          cd dist
+
+          # 为每个平台创建压缩包
+          for file in easy-stream-*; do
+            if [[ $file == *.exe ]]; then
+              # Windows 平台
+              base_name="${file%.exe}"
+              mkdir -p "${base_name}"
+              cp "$file" "${base_name}/"
+              cp ../config.example.yaml "${base_name}/"
+
+              # 创建 README
+              cat > "${base_name}/README.txt" << 'EOF'
+Easy-Stream - 流媒体管理系统
+================================
+
+快速开始：
+1. 复制 config.example.yaml 为 config.yaml
+2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
+3. 运行 easy-stream-*.exe
+
+配置说明：
+- 必须配置：数据库连接、Redis 连接、JWT secret
+- ZLMediaKit 配置：确保 hookBaseURL 指向本服务地址
+- 存储配置：默认使用本地存储，可选配置 S3/COS/OSS
+
+环境变量支持：
+可以通过环境变量覆盖配置，例如：
+  DATABASE_HOST=localhost
+  REDIS_PORT=6379
+  JWT_SECRET=your-secret
+
+更多信息：https://github.com/your-repo/Easy-Stream
+EOF
+
+              zip -r "${base_name}.zip" "${base_name}"
+              rm -rf "${base_name}"
+            else
+              # Linux/macOS 平台
+              base_name="$file"
+              mkdir -p "${base_name}"
+              cp "$file" "${base_name}/"
+              cp ../config.example.yaml "${base_name}/"
+
+              # 创建 README
+              cat > "${base_name}/README.txt" << 'EOF'
+Easy-Stream - 流媒体管理系统
+================================
+
+快速开始：
+1. 复制 config.example.yaml 为 config.yaml
+2. 修改 config.yaml 中的配置（数据库、Redis、ZLMediaKit 等）
+3. 添加执行权限：chmod +x easy-stream-*
+4. 运行：./easy-stream-*
+
+配置说明：
+- 必须配置：数据库连接、Redis 连接、JWT secret
+- ZLMediaKit 配置：确保 hookBaseURL 指向本服务地址
+- 存储配置：默认使用本地存储，可选配置 S3/COS/OSS
+
+环境变量支持：
+可以通过环境变量覆盖配置，例如：
+  export DATABASE_HOST=localhost
+  export REDIS_PORT=6379
+  export JWT_SECRET=your-secret
+
+更多信息：https://github.com/your-repo/Easy-Stream
+EOF
+
+              tar -czf "${base_name}.tar.gz" "${base_name}"
+              rm -rf "${base_name}"
+            fi
+          done
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.zip *.tar.gz > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/checksums.txt
+          body: |
+            ## Easy-Stream ${{ steps.version.outputs.VERSION }}
+
+            ### 下载说明
+
+            请根据您的操作系统下载对应的压缩包：
+
+            - **Linux AMD64**: `easy-stream-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz`
+            - **Linux ARM64**: `easy-stream-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz`
+            - **Windows AMD64**: `easy-stream-${{ steps.version.outputs.VERSION }}-windows-amd64.zip`
+            - **macOS AMD64 (Intel)**: `easy-stream-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz`
+            - **macOS ARM64 (Apple Silicon)**: `easy-stream-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz`
+
+            ### 安装步骤
+
+            1. 下载对应平台的压缩包
+            2. 解压缩文件
+            3. 复制 `config.example.yaml` 为 `config.yaml`
+            4. 修改配置文件中的数据库、Redis、ZLMediaKit 等连接信息
+            5. 运行可执行文件
+
+            ### 依赖服务
+
+            运行前请确保以下服务已启动：
+            - PostgreSQL 数据库
+            - Redis
+            - ZLMediaKit 流媒体服务器
+
+            ### 校验文件完整性
+
+            下载 `checksums.txt` 文件，使用以下命令验证：
+            ```bash
+            sha256sum -c checksums.txt
+            ```
+
+            ### 更新日志
+
+            请查看提交历史了解本版本的更新内容。
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
