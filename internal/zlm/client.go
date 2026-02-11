@@ -269,7 +269,9 @@ func (c *Client) ConfigureHooks(hookBaseURL string) error {
 	configs := map[string]string{
 		"hook.enable":                 "1",
 		"hook.on_publish":             hookBaseURL + "/on_publish",
+		"hook.on_unpublish":           hookBaseURL + "/on_unpublish",
 		"hook.on_play":                hookBaseURL + "/on_play",
+		"hook.on_player_disconnect":   hookBaseURL + "/on_player_disconnect",
 		"hook.on_flow_report":         hookBaseURL + "/on_flow_report",
 		"hook.on_stream_none_reader":  hookBaseURL + "/on_stream_none_reader",
 		"hook.on_record_mp4":          hookBaseURL + "/on_record_mp4",
