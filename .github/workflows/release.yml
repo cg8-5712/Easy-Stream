@@ -73,6 +73,7 @@ jobs:
             if [[ $file == *.exe ]]; then
               # Windows 平台
               base_name="${file%.exe}"
+              rm -rf "${base_name}"
               mkdir -p "${base_name}"
               cp "$file" "${base_name}/"
               cp ../config.example.yaml "${base_name}/"
@@ -106,6 +107,7 @@ jobs:
             else
               # Linux/macOS 平台
               base_name="$file"
+              rm -rf "${base_name}"
               mkdir -p "${base_name}"
               cp "$file" "${base_name}/"
               cp ../config.example.yaml "${base_name}/"
