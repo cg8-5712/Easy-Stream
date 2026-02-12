@@ -33,6 +33,11 @@ func (h *HookHandler) OnPublish(c *gin.Context) {
 		return
 	}
 
+	logger.Info("OnPublish hook called",
+		zap.String("app", req.App),
+		zap.String("stream", req.Stream),
+		zap.String("schema", req.Schema))
+
 	if err := h.streamSvc.OnPublish(&req); err != nil {
 		// 根据错误类型返回不同的错误信息
 		msg := "unknown error"
@@ -139,8 +144,12 @@ func (h *HookHandler) OnStreamChanged(c *gin.Context) {
 		zap.String("stream", req.Stream),
 		zap.Bool("regist", req.Regist))
 
-	// regist=false 表示推流结束
-	if !req.Regist {
+	// regist=true 表示流注册（推流开始）
+	if req.Regist {
+		// 流已完全注册，此时开始录制
+		h.streamSvc.OnStreamRegistered(&req)
+	} else {
+		// regist=false 表示推流结束
 		// 转换为 OnUnpublish 请求
 		unpublishReq := &model.OnUnpublishRequest{
 			App:        req.App,

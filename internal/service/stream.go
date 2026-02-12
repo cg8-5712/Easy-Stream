@@ -510,6 +510,20 @@ func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 		return err
 	}
 
+	return nil
+}
+
+// OnStreamRegistered 处理流注册回调（在 on_stream_changed 中 regist=true 时调用）
+// 此时流已完全注册，可以安全地开始录制
+func (s *StreamService) OnStreamRegistered(req *model.OnStreamChangedRequest) error {
+	stream, err := s.streamRepo.GetByKey(req.Stream)
+	if err != nil {
+		if errors.Is(err, repository.ErrStreamNotFound) {
+			return nil
+		}
+		return err
+	}
+
 	// 如果开启了录制，自动开始录制
 	if stream.RecordEnabled {
 		// 更新录制状态为 recording
@@ -525,22 +539,34 @@ func (s *StreamService) OnPublish(req *model.OnPublishRequest) error {
 				}
 			}()
 
+			// 流已完全注册，无需等待，直接开始录制
 			// 2. 使用 channel + select 实现超时控制
-			done := make(chan error, 1)
+			done := make(chan struct {
+				resp *zlm.RecordResponse
+				err  error
+			}, 1)
 			go func() {
-				_, err := s.zlmClient.StartRecord("live", req.Stream, zlm.RecordTypeMP4, "")
-				done <- err
+				resp, err := s.zlmClient.StartRecord("live", req.Stream, zlm.RecordTypeMP4, "")
+				done <- struct {
+					resp *zlm.RecordResponse
+					err  error
+				}{resp, err}
 			}()
 
 			// 3. 等待结果或超时
 			select {
-			case err := <-done:
-				if err != nil {
+			case result := <-done:
+				if result.err != nil {
 					logger.Error("failed to start record for stream",
 						zap.String("stream_key", req.Stream),
-						zap.Error(err))
+						zap.Error(result.err))
 					// 录制失败，更新状态为 failed
 					s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
+				} else {
+					logger.Info("start record success",
+						zap.String("stream_key", req.Stream),
+						zap.Int("code", result.resp.Code),
+						zap.Bool("result", result.resp.Result))
 				}
 			case <-time.After(constants.RecordOperationTimeout):
 				logger.Error("start record timeout",
