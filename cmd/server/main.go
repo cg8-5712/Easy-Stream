@@ -198,6 +198,12 @@ func main() {
 			hooks.POST("/on_player_disconnect", hookHandler.OnPlayerDisconnect)
 			hooks.POST("/on_record_mp4", hookHandler.OnRecordMP4)
 		}
+
+		// WHIP 协议接口（用于 OBS 等客户端的 WebRTC 推流）
+		whip := api.Group("/whip")
+		{
+			whip.POST("", streamHandler.WHIPPush) // WHIP 推流端点
+		}
 	}
 
 	// 启动服务

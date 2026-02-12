@@ -238,6 +238,18 @@ Content-Type: application/json
 }
 ```
 
+### WHIP 推流（OBS 30+ / 标准 WebRTC 推流）⭐ 新增
+```
+WHIP 端点: http://{server}:8080/api/v1/whip
+Bearer 令牌: {stream_key}
+```
+
+**OBS 配置方法**：
+1. 打开 OBS → 设置 → 推流
+2. 服务：WHIP
+3. 服务器：`http://{server}:8080/api/v1/whip`
+4. Bearer 令牌：`{你的stream_key}`
+
 ## 播放地址
 
 ### 方式1：通过 API 获取所有播放地址（推荐）
@@ -409,13 +421,19 @@ on_player_disconnect=http://backend:8080/api/v1/hooks/on_player_disconnect
 
 ### OBS 推流配置
 
-1. **RTMP 推流（推荐）**
+1. **RTMP 推流（推荐，最稳定）**
    - 打开 OBS → 设置 → 推流
    - 服务：自定义
    - 服务器：`rtmp://192.168.1.9:1935/live`
    - 串流密钥：`{你的stream_key}`
 
-2. **SRT 推流（低延迟）**
+2. **WHIP 推流（WebRTC，超低延迟）**⭐ 新增
+   - 打开 OBS → 设置 → 推流
+   - 服务：WHIP
+   - 服务器：`http://192.168.1.9:8080/api/v1/whip`
+   - Bearer 令牌：`{你的stream_key}`
+
+3. **SRT 推流（低延迟，抗丢包）**
    - 服务：自定义
    - 服务器：`srt://192.168.1.9:9000?streamid=#!::r=live/{stream_key},m=publish`
 

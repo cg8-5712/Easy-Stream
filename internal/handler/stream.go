@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -415,4 +417,61 @@ func (h *StreamHandler) WebRTCPush(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// WHIPPush WHIP 协议推流接口（符合 WHIP 标准，用于 OBS 等客户端）
+// 参考: https://www.ietf.org/archive/id/draft-ietf-wish-whip-01.html
+func (h *StreamHandler) WHIPPush(c *gin.Context) {
+	// 从 Authorization header 获取 Bearer token (stream_key)
+	authHeader := c.GetHeader("Authorization")
+	// fmt.Println(fmt.Sprintf("Authorization header: %s\n", authHeader))
+	if authHeader == "" {
+		c.Header("Authorization header", "Bearer")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+		return
+	}
+
+	// 解析 Bearer token
+	const bearerPrefix = "Bearer "
+	if len(authHeader) < len(bearerPrefix) || authHeader[:len(bearerPrefix)] != bearerPrefix {
+		c.Header("Authorization header", "Bearer")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization format"})
+		return
+	}
+	streamKey := authHeader[len(bearerPrefix):]
+
+	// 读取 SDP offer (纯文本格式)
+	sdpOffer, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read SDP offer"})
+		return
+	}
+
+	if len(sdpOffer) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "empty SDP offer"})
+		return
+	}
+
+	// 调用 WebRTC 推流服务
+	resp, err := h.streamSvc.WebRTCPush(streamKey, string(sdpOffer))
+	if err != nil {
+		switch err {
+		case service.ErrStreamNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		case service.ErrStreamExpired:
+			c.JSON(http.StatusForbidden, gin.H{"error": "stream has expired, please create a new stream or reset status"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	// WHIP 标准响应：
+	// - 201 Created 状态码
+	// - Location header 指向资源 URL
+	// - Content-Type: application/sdp
+	// - Body: SDP answer (纯文本)
+	c.Header("Content-Type", "application/sdp")
+	c.Header("Location", fmt.Sprintf("/whip/%s", streamKey))
+	c.Data(http.StatusCreated, "application/sdp", []byte(resp.SDP))
 }
