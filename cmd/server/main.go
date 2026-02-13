@@ -19,6 +19,11 @@ import (
 )
 
 func main() {
+	// 解析命令行参数
+	if ParseFlags() {
+		return
+	}
+
 	// 加载配置
 	cfg, err := config.Load()
 	if err != nil {
