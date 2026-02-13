@@ -1,8 +1,11 @@
 package repository
 
 import (
+	"crypto/rand"
+	"math/big"
 	"time"
 
+	"easy-stream/internal/config"
 	"easy-stream/internal/model"
 	"easy-stream/pkg/logger"
 
@@ -12,11 +15,11 @@ import (
 )
 
 // SeedData 在 debug 模式下插入测试数据
-func SeedData(db *gorm.DB) error {
+func SeedData(db *gorm.DB, cfg *config.Config) error {
 	logger.Info("debug mode: starting to insert seed data")
 
 	// 插入测试用户
-	if err := seedUsers(db); err != nil {
+	if err := seedUsers(db, cfg); err != nil {
 		return err
 	}
 
@@ -29,49 +32,69 @@ func SeedData(db *gorm.DB) error {
 	return nil
 }
 
-// seedUsers 插入测试用户
-func seedUsers(db *gorm.DB) error {
-	users := []struct {
-		username string
-		password string
-		realName string
-		email    string
-	}{
-		{"admin", "admin123", "管理员", "admin@example.com"},
-		{"operator", "operator123", "操作员", "operator@example.com"},
-		{"viewer", "viewer123", "观众", "viewer@example.com"},
+// generateRandomPassword 生成随机密码（避免易混淆字符）
+func generateRandomPassword(length int) (string, error) {
+	// 避免易混淆的字符：0 O o, 1 l I i, 2 Z z
+	const charset = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXY3456789"
+	password := make([]byte, length)
+
+	for i := range password {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+		password[i] = charset[num.Int64()]
 	}
 
-	for _, u := range users {
-		// 检查用户是否已存在
-		var count int64
-		db.Model(&model.User{}).Where("username = ?", u.username).Count(&count)
-		if count > 0 {
-			continue
-		}
+	return string(password), nil
+}
 
-		// 生成密码哈希
-		hash, err := bcrypt.GenerateFromPassword([]byte(u.password), bcrypt.DefaultCost)
+// seedUsers 插入测试用户
+func seedUsers(db *gorm.DB, cfg *config.Config) error {
+	// 检查 admin 用户是否已存在
+	var count int64
+	db.Model(&model.User{}).Where("username = ?", cfg.Admin.Username).Count(&count)
+	if count > 0 {
+		logger.Debug("admin user already exists, skipping seed")
+		return nil
+	}
+
+	// 确定管理员密码
+	adminPassword := cfg.Admin.Password
+	if adminPassword == "" {
+		// 生成随机密码
+		var err error
+		adminPassword, err = generateRandomPassword(12)
 		if err != nil {
 			return err
 		}
-
-		// 创建用户
-		user := &model.User{
-			Username:     u.username,
-			PasswordHash: string(hash),
-			RealName:     &u.realName,
-			Email:        &u.email,
-		}
-
-		if err := db.Create(user).Error; err != nil {
-			return err
-		}
-
-		logger.Debug("debug mode: created user",
-			zap.String("username", u.username),
-			zap.String("password", u.password))
+		logger.Warn("admin password not configured, generated random password",
+			zap.String("username", cfg.Admin.Username),
+			zap.String("password", adminPassword))
 	}
+
+	// 生成密码哈希
+	hash, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// 创建管理员用户
+	realName := "Administrator"
+	email := "admin@example.com"
+	user := &model.User{
+		Username:     cfg.Admin.Username,
+		PasswordHash: string(hash),
+		RealName:     &realName,
+		Email:        &email,
+	}
+
+	if err := db.Create(user).Error; err != nil {
+		return err
+	}
+
+	logger.Info("admin user created",
+		zap.String("username", cfg.Admin.Username))
 
 	return nil
 }

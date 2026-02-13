@@ -11,6 +11,7 @@ type Config struct {
 	Database   DatabaseConfig
 	Redis      RedisConfig
 	JWT        JWTConfig
+	Admin      AdminConfig
 	ZLMediaKit ZLMediaKitConfig
 	Log        LogConfig
 	Storage    StorageConfig
@@ -23,12 +24,14 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
+	Type     string // postgres / mysql / sqlite
 	Host     string
 	Port     string
 	User     string
 	Password string
 	DBName   string
 	SSLMode  string
+	FilePath string // SQLite 数据库文件路径
 }
 
 type RedisConfig struct {
@@ -41,6 +44,11 @@ type RedisConfig struct {
 type JWTConfig struct {
 	Secret     string
 	ExpireHour int
+}
+
+type AdminConfig struct {
+	Username string
+	Password string
 }
 
 type ZLMediaKitConfig struct {
@@ -94,13 +102,17 @@ func Load() (*Config, error) {
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("server.mode", "debug")
+	viper.SetDefault("database.type", "sqlite")
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", "5432")
 	viper.SetDefault("database.sslmode", "disable")
+	viper.SetDefault("database.filepath", "./easy_stream.db")
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", "6379")
 	viper.SetDefault("redis.db", 0)
 	viper.SetDefault("jwt.expireHour", 24)
+	viper.SetDefault("admin.username", "admin")
+	viper.SetDefault("admin.password", "")
 	viper.SetDefault("zlmediakit.port", "80")
 	viper.SetDefault("zlmediakit.httpPort", "80")
 	viper.SetDefault("zlmediakit.httpsPort", "443")

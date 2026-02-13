@@ -56,7 +56,7 @@ func main() {
 
 	// Debug 模式下插入种子数据
 	if cfg.Server.Mode == "debug" {
-		if err := repository.SeedData(db); err != nil {
+		if err := repository.SeedData(db, cfg); err != nil {
 			logger.Warn("failed to seed data", zap.Error(err))
 		}
 	}
