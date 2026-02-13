@@ -2015,7 +2015,7 @@ GET /api/v1/records/abc123def456
 
 ---
 
-### 8.3 播放录制文件（游客/管理员）⭐ 新增
+### 8.3 播放录制文件（管理员）⭐ 新增
 
 **接口地址**
 ```
@@ -2027,10 +2027,6 @@ GET /api/v1/records/:key/play/*filepath
 - 支持 HTTP Range 请求，可拖拽进度条
 - 适合前端 `<video>` 标签直接播放
 
-**权限说明**
-- **公开直播**：任何人都可以播放录制文件（无需认证）
-- **私有直播**：只有创建者可以播放（需要认证）
-
 **路径参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
@@ -2038,7 +2034,7 @@ GET /api/v1/records/:key/play/*filepath
 | key | string | 是 | 推流密钥 |
 | filepath | string | 是 | 文件路径（支持多级目录） |
 
-**请求头（私有直播需要）**
+**请求头**
 ```
 Authorization: Bearer {access_token}
 ```
@@ -2104,23 +2100,16 @@ Content-Length: 1024
 }
 ```
 
-401 Unauthorized (私有直播未认证):
+401 Unauthorized:
 ```json
 {
   "error": "authentication required"
 }
 ```
 
-403 Forbidden (私有直播非创建者):
-```json
-{
-  "error": "access denied"
-}
-```
-
 ---
 
-### 8.4 下载录制文件（游客/管理员）
+### 8.4 下载录制文件（管理员）
 
 **接口地址**
 ```
@@ -2132,10 +2121,6 @@ GET /api/v1/records/:key/download/*filepath
 - 不支持 Range 请求
 - 适合用户保存文件到本地
 
-**权限说明**
-- **公开直播**：任何人都可以下载录制文件（无需认证）
-- **私有直播**：只有创建者可以下载（需要认证）
-
 **路径参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
@@ -2143,7 +2128,7 @@ GET /api/v1/records/:key/download/*filepath
 | key | string | 是 | 推流密钥 |
 | filepath | string | 是 | 文件路径（支持多级目录） |
 
-**请求头（私有直播需要）**
+**请求头**
 ```
 Authorization: Bearer {access_token}
 ```
