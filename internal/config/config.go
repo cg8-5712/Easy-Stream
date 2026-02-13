@@ -52,6 +52,10 @@ type ZLMediaKitConfig struct {
 	HTTPSPort    string // HTTPS 端口，默认 "443"
 	ExternalHost string // 外部访问地址（生成播放 URL）
 	WebRTCPort   string // WebRTC 端口，默认 "8000"
+	// 录制文件配置
+	RecordMode      string // 录制文件访问模式: local（本地文件系统）/ remote（远程HTTP访问）
+	RecordLocalPath string // 本地模式：录制文件本地路径（与ZLM的record_path对应）
+	RecordBaseURL   string // 远程模式：录制文件访问基础URL（如 http://zlm-server:8080/record）
 }
 
 type LogConfig struct {
@@ -101,6 +105,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("zlmediakit.httpPort", "80")
 	viper.SetDefault("zlmediakit.httpsPort", "443")
 	viper.SetDefault("zlmediakit.webrtcPort", "8000")
+	viper.SetDefault("zlmediakit.recordMode", "local")
 	viper.SetDefault("log.level", "info")
 
 	// 支持环境变量

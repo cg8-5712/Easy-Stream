@@ -56,6 +56,44 @@ func (s *LocalStorage) Upload(ctx context.Context, localPath, remotePath string)
 	return destPath, nil
 }
 
+// Delete 删除本地存储中的文件
+func (s *LocalStorage) Delete(ctx context.Context, remotePath string) error {
+	destPath := filepath.Join(s.baseDir, remotePath)
+	if err := os.Remove(destPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil // 文件不存在视为删除成功
+		}
+		return fmt.Errorf("delete local file failed: %w", err)
+	}
+	return nil
+}
+
+// UploadFromReader 从 Reader 上传文件到本地存储（流式传输）
+func (s *LocalStorage) UploadFromReader(ctx context.Context, reader io.Reader, remotePath string, size int64) (string, error) {
+	destPath := filepath.Join(s.baseDir, remotePath)
+
+	// 确保目标目录存在
+	destDir := filepath.Dir(destPath)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return "", fmt.Errorf("create dest dir failed: %w", err)
+	}
+
+	// 创建目标文件
+	dstFile, err := os.Create(destPath)
+	if err != nil {
+		return "", fmt.Errorf("create dest file failed: %w", err)
+	}
+	defer dstFile.Close()
+
+	// 从 reader 复制到文件
+	_, err = io.Copy(dstFile, reader)
+	if err != nil {
+		return "", fmt.Errorf("copy data failed: %w", err)
+	}
+
+	return destPath, nil
+}
+
 // copyFile 复制文件
 func copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)

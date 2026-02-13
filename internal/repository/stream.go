@@ -123,6 +123,31 @@ func (r *StreamRepository) UpdateRecordStatus(key, status string) error {
 	})
 }
 
+// UpdateRecordFileURLs 更新指定录制文件的URLs
+func (r *StreamRepository) UpdateRecordFileURLs(key, fileName string, urls map[string]string) error {
+	// 使用PostgreSQL JSONB操作更新指定文件的URLs
+	urlsJSON, err := json.Marshal(urls)
+	if err != nil {
+		return err
+	}
+
+	return r.db.Exec(`
+		UPDATE streams
+		SET record_files = (
+			SELECT jsonb_agg(
+				CASE
+					WHEN elem->>'file_name' = $1
+					THEN jsonb_set(elem, '{urls}', $2::jsonb)
+					ELSE elem
+				END
+			)
+			FROM jsonb_array_elements(record_files) elem
+		),
+		updated_at = $3
+		WHERE stream_key = $4
+	`, fileName, urlsJSON, time.Now(), key).Error
+}
+
 // GetPushingStreams 获取所有正在推流的直播
 func (r *StreamRepository) GetPushingStreams() ([]*model.Stream, error) {
 	var streams []*model.Stream

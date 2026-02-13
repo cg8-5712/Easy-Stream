@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -92,6 +93,58 @@ func (s *S3Storage) Upload(ctx context.Context, localPath, remotePath string) (s
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 		Body:   file,
+	})
+	if err != nil {
+		return "", fmt.Errorf("upload to s3 failed: %w", err)
+	}
+
+	// 生成访问URL
+	var url string
+	if s.customDomain != "" {
+		url = fmt.Sprintf("%s/%s", s.customDomain, key)
+	} else if s.endpoint != "" {
+		url = fmt.Sprintf("%s/%s/%s", s.endpoint, s.bucket, key)
+	} else {
+		url = fmt.Sprintf("https://%s.s3.amazonaws.com/%s", s.bucket, key)
+	}
+
+	return url, nil
+}
+
+// Delete 从S3删除文件
+func (s *S3Storage) Delete(ctx context.Context, remotePath string) error {
+	// 构建对象键
+	key := remotePath
+	if s.pathPrefix != "" {
+		key = filepath.Join(s.pathPrefix, remotePath)
+	}
+
+	// 删除对象
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("delete from s3 failed: %w", err)
+	}
+
+	return nil
+}
+
+// UploadFromReader 从 Reader 上传文件到 S3（流式传输）
+func (s *S3Storage) UploadFromReader(ctx context.Context, reader io.Reader, remotePath string, size int64) (string, error) {
+	// 构建对象键
+	key := remotePath
+	if s.pathPrefix != "" {
+		key = filepath.Join(s.pathPrefix, remotePath)
+	}
+
+	// 上传文件
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(key),
+		Body:          reader,
+		ContentLength: aws.Int64(size),
 	})
 	if err != nil {
 		return "", fmt.Errorf("upload to s3 failed: %w", err)

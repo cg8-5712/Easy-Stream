@@ -10,7 +10,8 @@
       "Bash(fi)",
       "Bash(go build:*)",
       "Bash(PGPASSWORD=postgres psql:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "WebFetch(domain:docs.zlmediakit.com)"
     ]
   }
 }

@@ -40,6 +40,23 @@ zlmediakit:
   # webrtcPort: WebRTC 端口
   webrtcPort: "8000"
 
+  # 录制文件管理配置
+  # recordMode: 录制文件访问模式
+  #   - local: Main Server 和 ZLM 在同一服务器，可直接访问本地文件系统
+  #   - remote: Main Server 和 ZLM 在不同服务器，通过 HTTP 访问录制文件
+  recordMode: "local"
+
+  # recordLocalPath: 本地模式下，ZLM 录制文件的存储路径
+  # 必须与 ZLM 配置中的 record.filePath 一致
+  # 仅在 recordMode=local 时需要配置
+  recordLocalPath: "/data/zlm/record"
+
+  # recordBaseURL: 录制文件的 HTTP 访问基础 URL
+  # - 本地模式：可选，用于生成下载 URL（如果配置了静态文件服务）
+  # - 远程模式：必填，ZLM 服务器提供的录制文件访问 URL
+  # 注意：推荐使用方案3（Main Server 代理下载），此字段可不配置
+  # recordBaseURL: "http://zlm-server.example.com/record"
+
 log:
   level: "debug"  # debug, info, warn, error
 

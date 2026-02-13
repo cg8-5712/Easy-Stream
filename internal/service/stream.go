@@ -701,12 +701,37 @@ func (s *StreamService) CheckExpiredStreams() error {
 
 // AddRecordFile 添加录制文件（包含完整元数据）
 func (s *StreamService) AddRecordFile(streamKey string, recordFile *model.RecordFile) error {
+	// 在远程模式下，添加 download URL
+	if !s.IsRecordFileLocal() {
+		downloadURL := s.GetRecordFileURL(recordFile.FilePath)
+		if downloadURL != "" {
+			recordFile.URLs["download"] = downloadURL
+		}
+	}
 	return s.streamRepo.AppendRecordFile(streamKey, recordFile)
 }
 
 // UpdateRecordStatus 更新录制状态
 func (s *StreamService) UpdateRecordStatus(streamKey, status string) error {
 	return s.streamRepo.UpdateRecordStatus(streamKey, status)
+}
+
+// UpdateRecordFileURLs 更新录制文件的URLs
+func (s *StreamService) UpdateRecordFileURLs(streamKey, fileName string, urls map[string]string) error {
+	return s.streamRepo.UpdateRecordFileURLs(streamKey, fileName, urls)
+}
+
+// IsRecordFileLocal 判断录制文件是否在本地（本地模式）
+func (s *StreamService) IsRecordFileLocal() bool {
+	return s.zlmCfg.RecordMode == "local"
+}
+
+// GetRecordFileURL 获取录制文件的访问 URL（远程模式）
+func (s *StreamService) GetRecordFileURL(filePath string) string {
+	if s.zlmCfg.RecordBaseURL == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/%s", s.zlmCfg.RecordBaseURL, filePath)
 }
 
 // generateShareCode 生成6位分享码

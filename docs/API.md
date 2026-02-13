@@ -1883,6 +1883,345 @@ async function startWebRTCPush(streamKey) {
 **说明**
 - WebRTC 推流会自动触发 `on_publish` Hook 进行验证
 - 推流协议字段 `schema` 将显示为 `webrtc`
-- 推流成功后，观众可通过任意播放协议观看
+- 推流成功后,观众可通过任意播放协议观看
+
+---
+
+## 8. 录制文件管理接口 ⭐ 新增
+
+### 8.1 获取所有录制文件列表（管理员）
+
+**接口地址**
+```
+GET /api/v1/records
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**查询参数**
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+|--------|------|------|--------|------|
+| page | int | 否 | 1 | 页码 |
+| pageSize | int | 否 | 20 | 每页数量（最大100） |
+
+**请求示例**
+```
+GET /api/v1/records?page=1&pageSize=20
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "total": 50,
+  "streams": [
+    {
+      "id": 1,
+      "stream_key": "abc123def456",
+      "name": "技术分享会",
+      "record_status": "stopped",
+      "record_files": [
+        {
+          "file_name": "2024-01-15/12-30-45.mp4",
+          "file_path": "live/abc123def456/2024-01-15/12-30-45.mp4",
+          "file_size": 104857600,
+          "duration": 3600.5,
+          "start_time": 1705315845,
+          "created_at": "2024-01-15T12:30:45Z",
+          "urls": {
+            "download": "/api/v1/records/abc123def456/2024-01-15/12-30-45.mp4/download",
+            "s3": "https://bucket.s3.amazonaws.com/records/abc123def456/2024-01-15/12-30-45.mp4",
+            "cos": "https://bucket.cos.ap-guangzhou.myqcloud.com/records/abc123def456/2024-01-15/12-30-45.mp4"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+**字段说明**
+
+| 字段 | 说明 |
+|------|------|
+| file_name | 文件名（相对路径） |
+| file_path | 完整文件路径 |
+| file_size | 文件大小（字节） |
+| duration | 录制时长（秒） |
+| start_time | 录制开始时间戳 |
+| urls.download | Main Server 代理下载URL（推荐） |
+| urls.s3/cos/oss | 对象存储直接访问URL |
+
+---
+
+### 8.2 获取指定直播的录制文件（管理员）
+
+**接口地址**
+```
+GET /api/v1/records/:key
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+
+**请求示例**
+```
+GET /api/v1/records/abc123def456
+```
+
+**响应示例** (200 OK)
+```json
+{
+  "stream_id": 1,
+  "stream_key": "abc123def456",
+  "stream_name": "技术分享会",
+  "record_files": [
+    {
+      "file_name": "2024-01-15/12-30-45.mp4",
+      "file_path": "live/abc123def456/2024-01-15/12-30-45.mp4",
+      "file_size": 104857600,
+      "duration": 3600.5,
+      "start_time": 1705315845,
+      "created_at": "2024-01-15T12:30:45Z",
+      "urls": {
+        "download": "/api/v1/records/abc123def456/2024-01-15/12-30-45.mp4/download",
+        "s3": "https://bucket.s3.amazonaws.com/records/abc123def456/2024-01-15/12-30-45.mp4"
+      }
+    }
+  ],
+  "record_status": "stopped"
+}
+```
+
+**错误响应**
+
+404 Not Found:
+```json
+{
+  "error": "stream not found"
+}
+```
+
+---
+
+### 8.3 下载录制文件（游客/管理员）
+
+**接口地址**
+```
+GET /api/v1/records/:key/download/*filepath
+```
+
+**权限说明**
+- **公开直播**：任何人都可以下载录制文件（无需认证）
+- **私有直播**：只有创建者可以下载（需要认证）
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+| filepath | string | 是 | 文件路径（支持多级目录） |
+
+**请求头（私有直播需要）**
+```
+Authorization: Bearer {access_token}
+```
+
+**请求示例**
+```
+GET /api/v1/records/abc123def456/download/2024-01-15/12-30-45.mp4
+GET /api/v1/records/abc123def456/download/2026-02-12-10-46-24-0.mp4
+```
+
+**响应说明**
+
+| 模式 | 行为 |
+|------|------|
+| 本地模式 | 直接返回文件内容（200 OK） |
+| 远程模式（有对象存储） | 重定向到对象存储URL（302 Found） |
+| 远程模式（无对象存储） | 重定向到ZLM服务器URL（302 Found） |
+
+**本地模式响应** (200 OK)
+```
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename=2024-01-15/12-30-45.mp4
+Content-Transfer-Encoding: binary
+
+[文件二进制内容]
+```
+
+**远程模式响应** (302 Found)
+```
+Location: https://bucket.s3.amazonaws.com/records/abc123def456/2024-01-15/12-30-45.mp4
+```
+
+**错误响应**
+
+404 Not Found:
+```json
+{
+  "error": "stream not found"
+}
+```
+
+404 Not Found:
+```json
+{
+  "error": "file not found"
+}
+```
+
+401 Unauthorized (私有直播未认证):
+```json
+{
+  "error": "authentication required"
+}
+```
+
+403 Forbidden (私有直播非创建者):
+```json
+{
+  "error": "access denied"
+}
+```
+
+**前端使用示例**
+
+```javascript
+// 公开直播下载
+function downloadPublicRecord(streamKey, fileName) {
+  const url = `/api/v1/records/${streamKey}/download/${fileName}`;
+  window.location.href = url;
+}
+
+// 私有直播下载（需要token）
+function downloadPrivateRecord(streamKey, fileName, token) {
+  const url = `/api/v1/records/${streamKey}/download/${fileName}`;
+
+  fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => {
+    if (response.redirected) {
+      // 远程模式：重定向到对象存储
+      window.location.href = response.url;
+    } else {
+      // 本地模式：直接下载
+      return response.blob();
+    }
+  })
+  .then(blob => {
+    if (blob) {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+    }
+  });
+}
+```
+
+---
+
+### 8.4 删除录制文件（管理员）
+
+**接口地址**
+```
+DELETE /api/v1/records/:key/delete/*filepath
+```
+
+**请求头**
+```
+Authorization: Bearer {access_token}
+```
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+| filepath | string | 是 | 文件路径（支持多级目录） |
+
+**请求示例**
+```
+DELETE /api/v1/records/abc123def456/delete/2024-01-15/12-30-45.mp4
+DELETE /api/v1/records/abc123def456/delete/2026-02-12-10-46-24-0.mp4
+```
+
+**删除逻辑**
+
+系统会依次删除：
+1. **ZLM原始文件**（本地模式）或标记删除（远程模式）
+2. **所有对象存储备份**（S3/COS/OSS等）
+3. **数据库记录**
+
+**响应示例** (200 OK)
+```json
+{
+  "message": "record file deleted successfully"
+}
+```
+
+**错误响应**
+
+404 Not Found:
+```json
+{
+  "error": "stream not found"
+}
+```
+
+500 Internal Server Error:
+```json
+{
+  "error": "failed to delete file"
+}
+```
+
+**注意事项**
+
+| 模式 | 删除行为 |
+|------|---------|
+| 本地模式 | 删除ZLM本地文件 + 对象存储备份 + 数据库记录 |
+| 远程模式 | 只删除对象存储备份 + 数据库记录（ZLM文件需手动清理） |
+
+> ⚠️ **远程模式说明**：由于ZLM不提供删除文件的API，远程模式下无法删除ZLM服务器上的物理文件。建议配置定时任务自动清理过期文件。
+
+---
+
+## 录制文件URL说明
+
+每个录制文件包含多个访问URL：
+
+| URL类型 | 说明 | 优先级 |
+|---------|------|--------|
+| download | Main Server代理下载（推荐） | 最高 |
+| s3/cos/oss | 对象存储直接访问 | 中 |
+| 无URL | 仅ZLM本地存储 | 最低 |
+
+**推荐使用download URL的原因**：
+- ✅ 统一的权限控制（自动检查私有直播权限）
+- ✅ 智能源选择（优先对象存储，降低ZLM负载）
+- ✅ 安全性高（不直接暴露ZLM或对象存储）
+- ✅ 灵活性好（可随时切换下载源）
+
+---
+
+**文档版本**: v2.3
+**最后更新**: 2026-02-13
 
 ---

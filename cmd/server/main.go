@@ -59,6 +59,7 @@ func main() {
 	streamRepo := repository.NewStreamRepository(db)
 	shareLinkRepo := repository.NewShareLinkRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	recordRepo := repository.NewRecordRepository(db)
 
 	// 初始化 Service
 	streamSvc := service.NewStreamService(streamRepo, shareLinkRepo, rdb, cfg.ZLMediaKit)
@@ -73,6 +74,18 @@ func main() {
 			logger.Warn("failed to init storage manager", zap.Error(err))
 		}
 	}
+
+	// 初始化录制文件管理器
+	recordFileMgr, err := storage.NewRecordFileManager(cfg.ZLMediaKit)
+	if err != nil {
+		logger.Warn("failed to init record file manager", zap.Error(err))
+	} else {
+		logger.Info("record file manager initialized",
+			zap.String("mode", cfg.ZLMediaKit.RecordMode))
+	}
+
+	// 初始化 RecordService（需要在 recordFileMgr 和 storageManager 之后）
+	recordSvc := service.NewRecordService(recordRepo, streamRepo, recordFileMgr, storageManager)
 
 	// 初始化系统服务
 	systemSvc := service.NewSystemService(db, rdb, cfg.ZLMediaKit)
@@ -96,6 +109,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authSvc)
 	hookHandler := handler.NewHookHandler(streamSvc, storageManager)
 	systemHandler := handler.NewSystemHandler(systemSvc)
+	recordHandler := handler.NewRecordHandler(recordSvc)
 
 	// 启动定时任务：检查超时直播
 	go func() {
@@ -203,6 +217,19 @@ func main() {
 		whip := api.Group("/whip")
 		{
 			whip.POST("", streamHandler.WHIPPush) // WHIP 推流端点
+		}
+
+		// 录制文件下载接口（支持游客和管理员，根据直播可见性控制）
+		// 必须放在 records group 之前，避免被 /:key 路由拦截
+		api.GET("/records/:key/download/*filepath", middleware.OptionalAuth(cfg.JWT.Secret), recordHandler.DownloadFile)
+
+		// 录制文件管理接口（需要认证）
+		records := api.Group("/records")
+		records.Use(middleware.Auth(cfg.JWT.Secret))
+		{
+			records.GET("", recordHandler.ListRecords)                         // 获取所有录制文件列表
+			records.GET("/:key", recordHandler.GetRecordsByStreamKey)          // 根据stream_key获取录制文件
+			records.DELETE("/:key/delete/*filepath", recordHandler.DeleteRecordFile) // 删除指定的录制文件
 		}
 	}
 

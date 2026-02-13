@@ -17,6 +17,8 @@ tags:
     description: 推流管理相关接口
   - name: 分享
     description: 分享码和分享链接接口
+  - name: 录制文件
+    description: 录制文件管理接口
   - name: 系统
     description: 系统相关接口
   - name: Hook
@@ -103,11 +105,15 @@ components:
         record_enabled:
           type: boolean
           description: 是否开启录制
+        record_status:
+          type: string
+          enum: [idle, recording, stopped, failed]
+          description: 录制状态
         record_files:
           type: array
           items:
-            type: string
-          description: 录制文件路径列表
+            $ref: '#/components/schemas/RecordFile'
+          description: 录制文件列表（包含完整元数据）
         protocol:
           type: string
           description: 推流协议
@@ -289,6 +295,52 @@ components:
         message:
           type: string
           description: 错误信息（仅当 status 不为 up 时）
+
+    RecordFile:
+      type: object
+      description: 录制文件信息
+      properties:
+        file_name:
+          type: string
+          description: 文件名（相对路径）
+          example: "2024-01-15/12-30-45.mp4"
+        file_path:
+          type: string
+          description: 完整文件路径
+          example: "live/abc123def456/2024-01-15/12-30-45.mp4"
+        file_size:
+          type: integer
+          format: int64
+          description: 文件大小（字节）
+          example: 104857600
+        duration:
+          type: number
+          format: float
+          description: 录制时长（秒）
+          example: 3600.5
+        start_time:
+          type: integer
+          format: int64
+          description: 录制开始时间戳
+          example: 1705315845
+        time_len:
+          type: number
+          format: float
+          description: 录制时长（秒，ZLM 返回）
+          example: 3600.5
+        created_at:
+          type: string
+          format: date-time
+          description: 文件创建时间
+        urls:
+          type: object
+          description: 各存储的访问URL
+          additionalProperties:
+            type: string
+          example:
+            download: "/api/v1/records/abc123def456/2024-01-15/12-30-45.mp4/download"
+            s3: "https://bucket.s3.amazonaws.com/records/abc123def456/2024-01-15/12-30-45.mp4"
+            cos: "https://bucket.cos.ap-guangzhou.myqcloud.com/records/abc123def456/2024-01-15/12-30-45.mp4"
 
 paths:
   # ==================== 认证接口 ====================
@@ -1567,3 +1619,245 @@ paths:
                   close:
                     type: boolean
                     description: 是否关闭流
+
+  # ==================== 录制文件管理接口 ====================
+  /records:
+    get:
+      tags:
+        - 录制文件
+      summary: 获取所有录制文件列表
+      description: 管理员获取所有直播的录制文件列表（分页）
+      operationId: listAllRecords
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: pageSize
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: 总记录数
+                  streams:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        stream_key:
+                          type: string
+                        name:
+                          type: string
+                        record_status:
+                          type: string
+                        record_files:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/RecordFile'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /records/{key}:
+    get:
+      tags:
+        - 录制文件
+      summary: 获取指定直播的录制文件
+      description: 管理员获取指定直播的所有录制文件
+      operationId: getRecordsByStreamKey
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stream_id:
+                    type: integer
+                  stream_key:
+                    type: string
+                  stream_name:
+                    type: string
+                  record_files:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecordFile'
+                  record_status:
+                    type: string
+        '404':
+          description: 直播不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /records/{key}/{filename}:
+    delete:
+      tags:
+        - 录制文件
+      summary: 删除录制文件
+      description: |
+        管理员删除指定的录制文件
+
+        删除逻辑：
+        1. 删除 ZLM 原始文件（本地模式）或标记删除（远程模式）
+        2. 删除所有对象存储备份（S3/COS/OSS等）
+        3. 删除数据库记录
+
+        注意：远程模式下无法删除 ZLM 服务器上的物理文件，需要手动清理
+      operationId: deleteRecordFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
+          schema:
+            type: string
+        - name: filename
+          in: path
+          required: true
+          description: 文件名（需要 URL 编码）
+          schema:
+            type: string
+          example: "2024-01-15%2F12-30-45.mp4"
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          description: 直播或文件不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: 删除失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /records/{key}/{filename}/download:
+    get:
+      tags:
+        - 录制文件
+      summary: 下载录制文件
+      description: |
+        下载录制文件（通过 Main Server 代理）
+
+        权限规则：
+        - 公开直播：任何人都可以下载（无需认证）
+        - 私有直播：只有创建者可以下载（需要认证）
+
+        响应类型：
+        - 本地模式：直接返回文件内容（200 OK）
+        - 远程模式：重定向到对象存储或 ZLM 服务器（302 Found）
+      operationId: downloadRecordFile
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 推流密钥
+          schema:
+            type: string
+        - name: filename
+          in: path
+          required: true
+          description: 文件名（需要 URL 编码）
+          schema:
+            type: string
+          example: "2024-01-15%2F12-30-45.mp4"
+      responses:
+        '200':
+          description: 本地模式 - 直接返回文件
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: 文件下载头
+              example: "attachment; filename=2024-01-15/12-30-45.mp4"
+        '302':
+          description: 远程模式 - 重定向到对象存储或 ZLM 服务器
+          headers:
+            Location:
+              schema:
+                type: string
+              description: 重定向 URL
+              example: "https://bucket.s3.amazonaws.com/records/abc123def456/2024-01-15/12-30-45.mp4"
+        '404':
+          description: 直播或文件不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 私有直播未认证
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 私有直播非创建者
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
