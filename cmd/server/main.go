@@ -219,20 +219,14 @@ func main() {
 			whip.POST("", streamHandler.WHIPPush) // WHIP 推流端点
 		}
 
-		// 录制文件播放接口（支持游客和管理员，根据直播可见性控制，支持 Range 请求）
-		// 必须放在 records group 之前，避免被 /:key 路由拦截
-		api.GET("/records/:key/play/*filepath", middleware.OptionalAuth(cfg.JWT.Secret), recordHandler.PlayFile)
-
-		// 录制文件下载接口（支持游客和管理员，根据直播可见性控制）
-		// 必须放在 records group 之前，避免被 /:key 路由拦截
-		api.GET("/records/:key/download/*filepath", middleware.OptionalAuth(cfg.JWT.Secret), recordHandler.DownloadFile)
-
-		// 录制文件管理接口（需要认证）
+		// 录制文件管理接口（需要管理员认证）
 		records := api.Group("/records")
 		records.Use(middleware.Auth(cfg.JWT.Secret))
 		{
-			records.GET("", recordHandler.ListRecords)                         // 获取所有录制文件列表
-			records.GET("/:key", recordHandler.GetRecordsByStreamKey)          // 根据stream_key获取录制文件
+			records.GET("", recordHandler.ListRecords)                            // 获取所有录制文件列表
+			records.GET("/:key", recordHandler.GetRecordsByStreamKey)             // 根据stream_key获取录制文件
+			records.GET("/:key/play/*filepath", recordHandler.PlayFile)           // 播放录制文件（支持 Range 请求）
+			records.GET("/:key/download/*filepath", recordHandler.DownloadFile)   // 下载录制文件
 			records.DELETE("/:key/delete/*filepath", recordHandler.DeleteRecordFile) // 删除指定的录制文件
 		}
 	}

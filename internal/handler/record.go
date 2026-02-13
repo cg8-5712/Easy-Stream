@@ -123,21 +123,6 @@ func (h *RecordHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 
-	// 权限检查：私有直播需要认证
-	if stream.Visibility == model.StreamVisibilityPrivate {
-		userID, exists := c.Get("user_id")
-		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-			return
-		}
-
-		// 检查是否是创建者
-		if stream.CreatedBy != userID.(int64) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
-			return
-		}
-	}
-
 	// 本地模式：直接返回文件
 	if h.recordSvc.IsLocalMode() {
 		fullPath := h.recordSvc.GetFullPath(targetFile.FilePath)
@@ -252,21 +237,6 @@ func (h *RecordHandler) PlayFile(c *gin.Context) {
 	if targetFile == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 		return
-	}
-
-	// 权限检查：私有直播需要认证
-	if stream.Visibility == model.StreamVisibilityPrivate {
-		userID, exists := c.Get("user_id")
-		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-			return
-		}
-
-		// 检查是否是创建者
-		if stream.CreatedBy != userID.(int64) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
-			return
-		}
 	}
 
 	// 获取文件 URL
