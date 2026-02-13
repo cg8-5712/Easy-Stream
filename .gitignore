@@ -31,3 +31,5 @@ config.yaml
 # Editor/IDE
 # .idea/
 # .vscode/
+internal/static/dist
+web/dist

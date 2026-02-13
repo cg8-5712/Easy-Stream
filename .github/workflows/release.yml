@@ -17,6 +17,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+          cd ..
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -34,6 +48,10 @@ jobs:
 
       - name: Build binaries
         run: |
+          # Copy frontend dist to web for embedding
+          mkdir -p web
+          cp -r frontend/dist web/dist
+
           mkdir -p dist
           VERSION="${{ steps.version.outputs.VERSION }}"
 
@@ -50,6 +68,7 @@ jobs:
             echo "Building ${os}/${arch}..."
 
             CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build \
+              -tags embed_frontend \
               -ldflags="-s -w -X main.Version=${VERSION}" \
               -o "$output" \
               ./cmd/server
@@ -140,6 +159,11 @@ jobs:
             cp ../config.example.yaml "$pkg_dir/"
             cp /tmp/readme-unix.txt "$pkg_dir/README.txt"
 
+            # Copy frontend build output
+            if [ -d "../frontend/dist" ]; then
+              cp -r ../frontend/dist "$pkg_dir/frontend"
+            fi
+
             tar -czf "$output" -C "$pkg_dir" .
             rm -rf "$pkg_dir"
             rm -f "$binary"
@@ -164,6 +188,11 @@ jobs:
             cp "$binary" "$pkg_dir/easy-stream.exe"
             cp ../config.example.yaml "$pkg_dir/"
             cp /tmp/readme-windows.txt "$pkg_dir/README.txt"
+
+            # Copy frontend build output
+            if [ -d "../frontend/dist" ]; then
+              cp -r ../frontend/dist "$pkg_dir/frontend"
+            fi
 
             zip -rj "$output" "$pkg_dir"
             rm -rf "$pkg_dir"

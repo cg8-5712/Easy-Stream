@@ -12,6 +12,7 @@ import (
 	"easy-stream/internal/storage"
 	"easy-stream/internal/zlm"
 	"easy-stream/pkg/logger"
+	"easy-stream/web"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -129,6 +130,10 @@ func main() {
 
 	r := gin.Default()
 
+	// 禁用自动重定向，避免静态文件服务出现 301 循环
+	r.RedirectTrailingSlash = false
+	r.RedirectFixedPath = false
+
 	// 中间件
 	r.Use(middleware.Cors())
 	r.Use(middleware.Logger())
@@ -229,6 +234,11 @@ func main() {
 			records.GET("/:key/download/*filepath", recordHandler.DownloadFile)   // 下载录制文件
 			records.DELETE("/:key/delete/*filepath", recordHandler.DeleteRecordFile) // 删除指定的录制文件
 		}
+	}
+
+	// 静态文件服务（前端）- 必须在所有路由注册之后
+	if err := web.ServeStatic(r); err != nil {
+		logger.Warn("failed to serve static files", zap.Error(err))
 	}
 
 	// 启动服务
