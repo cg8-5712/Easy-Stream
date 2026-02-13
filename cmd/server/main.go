@@ -219,6 +219,10 @@ func main() {
 			whip.POST("", streamHandler.WHIPPush) // WHIP 推流端点
 		}
 
+		// 录制文件播放接口（支持游客和管理员，根据直播可见性控制，支持 Range 请求）
+		// 必须放在 records group 之前，避免被 /:key 路由拦截
+		api.GET("/records/:key/play/*filepath", middleware.OptionalAuth(cfg.JWT.Secret), recordHandler.PlayFile)
+
 		// 录制文件下载接口（支持游客和管理员，根据直播可见性控制）
 		// 必须放在 records group 之前，避免被 /:key 路由拦截
 		api.GET("/records/:key/download/*filepath", middleware.OptionalAuth(cfg.JWT.Secret), recordHandler.DownloadFile)

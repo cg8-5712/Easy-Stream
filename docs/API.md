@@ -2015,12 +2015,122 @@ GET /api/v1/records/abc123def456
 
 ---
 
-### 8.3 下载录制文件（游客/管理员）
+### 8.3 播放录制文件（游客/管理员）⭐ 新增
+
+**接口地址**
+```
+GET /api/v1/records/:key/play/*filepath
+```
+
+**功能说明**
+- 支持在线播放录制文件（video/mp4）
+- 支持 HTTP Range 请求，可拖拽进度条
+- 适合前端 `<video>` 标签直接播放
+
+**权限说明**
+- **公开直播**：任何人都可以播放录制文件（无需认证）
+- **私有直播**：只有创建者可以播放（需要认证）
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| key | string | 是 | 推流密钥 |
+| filepath | string | 是 | 文件路径（支持多级目录） |
+
+**请求头（私有直播需要）**
+```
+Authorization: Bearer {access_token}
+```
+
+**请求示例**
+```
+GET /api/v1/records/abc123def456/play/2024-01-15/12-30-45.mp4
+GET /api/v1/records/abc123def456/play/2026-02-12-10-46-24-0.mp4
+```
+
+**Range 请求示例**
+```
+GET /api/v1/records/abc123def456/play/2024-01-15/12-30-45.mp4
+Range: bytes=0-1023
+```
+
+**响应说明**
+
+| 模式 | 行为 |
+|------|------|
+| 本地模式 | 直接返回文件内容，自动支持 Range 请求 |
+| 远程模式 | 代理转发 Range 请求到远程服务器 |
+
+**完整响应** (200 OK)
+```
+Content-Type: video/mp4
+Accept-Ranges: bytes
+Content-Length: 104857600
+
+[文件二进制内容]
+```
+
+**Range 响应** (206 Partial Content)
+```
+Content-Type: video/mp4
+Accept-Ranges: bytes
+Content-Range: bytes 0-1023/104857600
+Content-Length: 1024
+
+[指定范围的文件内容]
+```
+
+**前端使用示例**
+```html
+<video controls width="800">
+  <source src="/api/v1/records/abc123def456/play/2024-01-15/12-30-45.mp4" type="video/mp4">
+</video>
+```
+
+**错误响应**
+
+404 Not Found:
+```json
+{
+  "error": "stream not found"
+}
+```
+
+404 Not Found:
+```json
+{
+  "error": "file not found"
+}
+```
+
+401 Unauthorized (私有直播未认证):
+```json
+{
+  "error": "authentication required"
+}
+```
+
+403 Forbidden (私有直播非创建者):
+```json
+{
+  "error": "access denied"
+}
+```
+
+---
+
+### 8.4 下载录制文件（游客/管理员）
 
 **接口地址**
 ```
 GET /api/v1/records/:key/download/*filepath
 ```
+
+**功能说明**
+- 强制下载录制文件（浏览器会提示保存）
+- 不支持 Range 请求
+- 适合用户保存文件到本地
 
 **权限说明**
 - **公开直播**：任何人都可以下载录制文件（无需认证）
@@ -2049,21 +2159,15 @@ GET /api/v1/records/abc123def456/download/2026-02-12-10-46-24-0.mp4
 | 模式 | 行为 |
 |------|------|
 | 本地模式 | 直接返回文件内容（200 OK） |
-| 远程模式（有对象存储） | 重定向到对象存储URL（302 Found） |
-| 远程模式（无对象存储） | 重定向到ZLM服务器URL（302 Found） |
+| 远程模式 | 代理转发文件内容（200 OK） |
 
-**本地模式响应** (200 OK)
+**响应** (200 OK)
 ```
 Content-Type: application/octet-stream
 Content-Disposition: attachment; filename=2024-01-15/12-30-45.mp4
 Content-Transfer-Encoding: binary
 
 [文件二进制内容]
-```
-
-**远程模式响应** (302 Found)
-```
-Location: https://bucket.s3.amazonaws.com/records/abc123def456/2024-01-15/12-30-45.mp4
 ```
 
 **错误响应**
@@ -2137,7 +2241,7 @@ function downloadPrivateRecord(streamKey, fileName, token) {
 
 ---
 
-### 8.4 删除录制文件（管理员）
+### 8.5 删除录制文件（管理员）
 
 **接口地址**
 ```

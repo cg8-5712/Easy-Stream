@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -218,4 +219,150 @@ func (h *RecordHandler) DownloadFile(c *gin.Context) {
 
 	// 流式传输文件内容
 	c.DataFromReader(http.StatusOK, resp.ContentLength, "application/octet-stream", resp.Body, nil)
+}
+
+// PlayFile 播放录制文件（支持 HTTP Range 请求）
+func (h *RecordHandler) PlayFile(c *gin.Context) {
+	streamKey := c.Param("key")
+	filepath := c.Param("filepath")
+
+	// 去掉前导的 /
+	filename := strings.TrimPrefix(filepath, "/")
+
+	// 获取录制文件信息
+	stream, err := h.recordSvc.GetRecordsByStreamKey(streamKey)
+	if err != nil {
+		if err == service.ErrStreamNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 查找指定的录制文件
+	var targetFile *model.RecordFile
+	for i := range stream.RecordFiles {
+		if stream.RecordFiles[i].FileName == filename {
+			targetFile = &stream.RecordFiles[i]
+			break
+		}
+	}
+
+	if targetFile == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
+		return
+	}
+
+	// 权限检查：私有直播需要认证
+	if stream.Visibility == model.StreamVisibilityPrivate {
+		userID, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+
+		// 检查是否是创建者
+		if stream.CreatedBy != userID.(int64) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+			return
+		}
+	}
+
+	// 获取文件 URL
+	var fileURL string
+	if h.recordSvc.IsLocalMode() {
+		// 本地模式：使用本地文件路径
+		fullPath := h.recordSvc.GetFullPath(targetFile.FilePath)
+		if fullPath == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "file path not available"})
+			return
+		}
+		// 本地模式直接使用 ServeFile，它自动支持 Range 请求
+		c.Header("Content-Type", "video/mp4")
+		c.Header("Accept-Ranges", "bytes")
+		http.ServeFile(c.Writer, c.Request, fullPath)
+		return
+	}
+
+	// 远程模式：获取远程 URL
+	if targetFile.URLs != nil {
+		// 优先级：对象存储 > 原始文件
+		for storageName, url := range targetFile.URLs {
+			if storageName != "download" && url != "" {
+				fileURL = url
+				break
+			}
+		}
+
+		// 如果没有对象存储URL，使用原始文件URL
+		if fileURL == "" {
+			if url, ok := targetFile.URLs["download"]; ok && url != "" {
+				fileURL = url
+			}
+		}
+	}
+
+	if fileURL == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file not available"})
+		return
+	}
+
+	// 远程模式：代理 Range 请求
+	h.proxyRangeRequest(c, fileURL, filename)
+}
+
+// proxyRangeRequest 代理 HTTP Range 请求
+func (h *RecordHandler) proxyRangeRequest(c *gin.Context, remoteURL, filename string) {
+	// 创建请求
+	req, err := http.NewRequest("GET", remoteURL, nil)
+	if err != nil {
+		logger.Error("failed to create request", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
+		return
+	}
+
+	// 转发 Range header（如果有）
+	rangeHeader := c.GetHeader("Range")
+	if rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+		logger.Info("proxying range request", zap.String("range", rangeHeader), zap.String("url", remoteURL))
+	}
+
+	// 发起请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error("failed to fetch from remote", zap.Error(err), zap.String("url", remoteURL))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch file from remote server"})
+		return
+	}
+	defer resp.Body.Close()
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		logger.Error("remote server error", zap.Int("status", resp.StatusCode), zap.String("url", remoteURL))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("remote server returned status %d", resp.StatusCode)})
+		return
+	}
+
+	// 设置响应头
+	c.Header("Content-Type", "video/mp4")
+	c.Header("Accept-Ranges", "bytes")
+
+	// 转发 Content-Range header（如果是 206 响应）
+	if resp.StatusCode == http.StatusPartialContent {
+		if contentRange := resp.Header.Get("Content-Range"); contentRange != "" {
+			c.Header("Content-Range", contentRange)
+		}
+	}
+
+	// 设置 Content-Length
+	if resp.ContentLength > 0 {
+		c.Header("Content-Length", strconv.FormatInt(resp.ContentLength, 10))
+	}
+
+	// 流式传输文件内容
+	c.Status(resp.StatusCode)
+	io.Copy(c.Writer, resp.Body)
 }
