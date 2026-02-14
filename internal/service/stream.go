@@ -592,7 +592,7 @@ func (s *StreamService) OnUnpublish(req *model.OnUnpublishRequest) error {
 	// 如果开启了录制，停止录制
 	if stream.RecordEnabled && stream.RecordStatus == model.RecordStatusRecording {
 		// 更新录制状态为 stopped
-		s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusStopped)
+		_ = s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusStopped)
 
 		go func() {
 			// 1. 添加 panic 恢复，防止 goroutine 崩溃导致整个程序崩溃

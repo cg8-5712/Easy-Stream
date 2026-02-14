@@ -185,7 +185,9 @@ func (h *RecordHandler) DownloadFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch file from remote server"})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	logger.Info("remote response", zap.Int("status", resp.StatusCode), zap.Int64("content_length", resp.ContentLength))
 	if resp.StatusCode != http.StatusOK {
@@ -307,7 +309,9 @@ func (h *RecordHandler) proxyRangeRequest(c *gin.Context, remoteURL, filename st
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch file from remote server"})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {

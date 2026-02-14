@@ -274,7 +274,9 @@ func (s *SystemService) checkInternet() *ServiceHealth {
 			Message: fmt.Sprintf("internet connection failed: %v", err),
 		}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return &ServiceHealth{

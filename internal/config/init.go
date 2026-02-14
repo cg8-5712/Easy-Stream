@@ -383,7 +383,9 @@ func testZLMediaKitConnection(cfg ZLMediaKitConfig) ServiceStatus {
 		status.Error = err.Error()
 		return status
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		status.Status = "✗ Failed"

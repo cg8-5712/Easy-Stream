@@ -241,7 +241,9 @@ func (h *HookHandler) uploadRecordFile(streamKey, fileName, filePath string, fil
 				zap.Error(err))
 			return
 		}
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			logger.Error("failed to download record file: bad status",
