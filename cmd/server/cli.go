@@ -1,17 +1,26 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"syscall"
 
 	"easy-stream/internal/config"
+	"easy-stream/internal/model"
+	"easy-stream/internal/repository"
+
+	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/term"
 )
 
 var (
 	initConfig = flag.Bool("init-config", false, "Generate default config.yaml file")
 	verify     = flag.Bool("verify", false, "Verify config.yaml file")
+	setAdmin   = flag.Bool("set-admin", false, "Set admin username and password")
 	help       = flag.Bool("help", false, "Show help message")
 )
 
@@ -77,7 +86,103 @@ func ParseFlags() bool {
 		return true
 	}
 
+	// 设置管理员账号密码
+	if *setAdmin {
+		if err := setAdminPassword(); err != nil {
+			log.Fatalf("✗ Failed to set admin password: %v", err)
+		}
+		return true
+	}
+
 	return false
+}
+
+// setAdminPassword 设置管理员账号密码
+func setAdminPassword() error {
+	fmt.Println("Easy-Stream - Set Admin Password")
+	fmt.Println()
+
+	// 加载配置
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// 连接数据库
+	db, err := repository.NewPostgresDB(cfg.Database)
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// 读取用户名
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Enter admin username (default: admin): ")
+	username, _ := reader.ReadString('\n')
+	username = strings.TrimSpace(username)
+	if username == "" {
+		username = "admin"
+	}
+
+	// 读取密码（隐藏输入）
+	fmt.Print("Enter admin password: ")
+	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+	fmt.Println()
+	password := string(passwordBytes)
+
+	if len(password) < 6 {
+		return fmt.Errorf("password must be at least 6 characters")
+	}
+
+	// 确认密码
+	fmt.Print("Confirm admin password: ")
+	confirmBytes, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+	fmt.Println()
+	confirm := string(confirmBytes)
+
+	if password != confirm {
+		return fmt.Errorf("passwords do not match")
+	}
+
+	// 生成密码哈希
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// 检查用户是否已存在
+	var existingUser model.User
+	result := db.Where("username = ?", username).First(&existingUser)
+
+	if result.Error == nil {
+		// 用户已存在，更新密码
+		if err := db.Model(&existingUser).Update("password_hash", string(hash)).Error; err != nil {
+			return fmt.Errorf("failed to update admin password: %w", err)
+		}
+		fmt.Printf("✓ Admin password updated successfully for user: %s\n", username)
+	} else {
+		// 用户不存在，创建新用户
+		realName := "Administrator"
+		email := "admin@example.com"
+		user := &model.User{
+			Username:     username,
+			PasswordHash: string(hash),
+			RealName:     &realName,
+			Email:        &email,
+		}
+
+		if err := db.Create(user).Error; err != nil {
+			return fmt.Errorf("failed to create admin user: %w", err)
+		}
+		fmt.Printf("✓ Admin user created successfully: %s\n", username)
+	}
+
+	return nil
 }
 
 func showHelp() {
@@ -91,11 +196,13 @@ func showHelp() {
 	fmt.Println("  --init-config    Generate default config.yaml file with example configuration")
 	fmt.Println("  --verify         Verify config.yaml file and test connections to all services")
 	fmt.Println("                   (PostgreSQL, Redis, ZLMediaKit)")
+	fmt.Println("  --set-admin      Set admin username and password interactively")
 	fmt.Println("  --help           Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  easy-stream --init-config    # Create config.yaml with default settings")
 	fmt.Println("  easy-stream --verify         # Verify config and test service connections")
+	fmt.Println("  easy-stream --set-admin      # Set admin username and password")
 	fmt.Println("  easy-stream                  # Start the server")
 	fmt.Println()
 	fmt.Println("GitHub:")

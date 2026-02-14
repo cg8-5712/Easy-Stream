@@ -149,6 +149,8 @@ func main() {
 		// 认证接口
 		auth := api.Group("/auth")
 		{
+			auth.GET("/init-status", authHandler.CheckInitStatus)           // 检查是否已初始化
+			auth.POST("/initialize", authHandler.InitializeAdmin)           // 初始化管理员账号
 			auth.POST("/login", middleware.LoginRateLimit(rdb.Client), authHandler.Login)
 			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.POST("/logout", authHandler.Logout)

@@ -59,18 +59,11 @@ func seedUsers(db *gorm.DB, cfg *config.Config) error {
 		return nil
 	}
 
-	// 确定管理员密码
+	// 如果配置文件中没有设置管理员密码，跳过创建
 	adminPassword := cfg.Admin.Password
 	if adminPassword == "" {
-		// 生成随机密码
-		var err error
-		adminPassword, err = generateRandomPassword(12)
-		if err != nil {
-			return err
-		}
-		logger.Warn("admin password not configured, generated random password",
-			zap.String("username", cfg.Admin.Username),
-			zap.String("password", adminPassword))
+		logger.Info("admin password not configured, skipping admin user creation. Please use CLI or WebUI to initialize admin account")
+		return nil
 	}
 
 	// 生成密码哈希

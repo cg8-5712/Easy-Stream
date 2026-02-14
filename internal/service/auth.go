@@ -151,3 +151,43 @@ func (s *AuthService) generateRefreshToken(userID int64) (string, error) {
 	return fmt.Sprintf("%d_%s", userID, hex.EncodeToString(b)), nil
 }
 
+// IsInitialized 检查是否已初始化管理员账号
+func (s *AuthService) IsInitialized() (bool, error) {
+	return s.userRepo.HasAnyUser()
+}
+
+// InitializeAdmin 初始化管理员账号
+func (s *AuthService) InitializeAdmin(username, password string) error {
+	// 检查是否已有用户
+	hasUser, err := s.userRepo.HasAnyUser()
+	if err != nil {
+		return err
+	}
+	if hasUser {
+		return errors.New("admin already initialized")
+	}
+
+	// 验证密码长度
+	if len(password) < 6 {
+		return errors.New("password must be at least 6 characters")
+	}
+
+	// 生成密码哈希
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// 创建管理员用户
+	realName := "Administrator"
+	email := "admin@example.com"
+	user := &model.User{
+		Username:     username,
+		PasswordHash: string(hash),
+		RealName:     &realName,
+		Email:        &email,
+	}
+
+	return s.userRepo.Create(user)
+}
+

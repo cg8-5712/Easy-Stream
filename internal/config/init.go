@@ -83,6 +83,74 @@ storage:
 	return os.WriteFile("config.yaml", []byte(defaultConfig), 0644)
 }
 
+// SaveConfig saves configuration to config.yaml file
+func SaveConfig(cfg *Config) error {
+	configContent := fmt.Sprintf(`# Easy-Stream Configuration File
+
+server:
+  host: "%s"
+  port: "%s"
+  mode: "%s"
+
+database:
+  type: "%s"
+  filepath: "%s"
+  host: "%s"
+  port: "%s"
+  user: "%s"
+  password: "%s"
+  dbname: "%s"
+  sslmode: "%s"
+
+redis:
+  host: "%s"
+  port: "%s"
+  password: "%s"
+  db: %d
+
+jwt:
+  secret: "%s"
+  expirehour: %d
+
+admin:
+  username: "%s"
+  password: ""
+
+zlmediakit:
+  host: "%s"
+  port: "%s"
+  secret: "%s"
+  hookbaseurl: "%s"
+  httpport: "%s"
+  httpsport: "%s"
+  webrtcport: "%s"
+  recordmode: "%s"
+  recordlocalpath: "%s"
+  recordbaseurl: "%s"
+  externalhost: "%s"
+
+log:
+  level: "%s"
+
+storage:
+  targets: []
+`,
+		cfg.Server.Host, cfg.Server.Port, cfg.Server.Mode,
+		cfg.Database.Type, cfg.Database.FilePath, cfg.Database.Host, cfg.Database.Port,
+		cfg.Database.User, cfg.Database.Password, cfg.Database.DBName, cfg.Database.SSLMode,
+		cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB,
+		cfg.JWT.Secret, cfg.JWT.ExpireHour,
+		cfg.Admin.Username,
+		cfg.ZLMediaKit.Host, cfg.ZLMediaKit.Port, cfg.ZLMediaKit.Secret, cfg.ZLMediaKit.HookBaseURL,
+		cfg.ZLMediaKit.HTTPPort, cfg.ZLMediaKit.HTTPSPort, cfg.ZLMediaKit.WebRTCPort,
+		cfg.ZLMediaKit.RecordMode, cfg.ZLMediaKit.RecordLocalPath, cfg.ZLMediaKit.RecordBaseURL,
+		cfg.ZLMediaKit.ExternalHost,
+		cfg.Log.Level,
+	)
+
+	return os.WriteFile("config.yaml", []byte(configContent), 0644)
+}
+
 // Validate validates the configuration
 func Validate(cfg *Config) error {
 	// Validate Server
