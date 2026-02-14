@@ -527,7 +527,7 @@ func (s *StreamService) OnStreamRegistered(req *model.OnStreamChangedRequest) er
 	// 如果开启了录制，自动开始录制
 	if stream.RecordEnabled {
 		// 更新录制状态为 recording
-		s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusRecording)
+		_ = s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusRecording)
 
 		go func() {
 			// 1. 添加 panic 恢复，防止 goroutine 崩溃导致整个程序崩溃
@@ -561,7 +561,7 @@ func (s *StreamService) OnStreamRegistered(req *model.OnStreamChangedRequest) er
 						zap.String("stream_key", req.Stream),
 						zap.Error(result.err))
 					// 录制失败，更新状态为 failed
-					s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
+					_ = s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
 				} else {
 					logger.Info("start record success",
 						zap.String("stream_key", req.Stream),
@@ -571,7 +571,7 @@ func (s *StreamService) OnStreamRegistered(req *model.OnStreamChangedRequest) er
 			case <-time.After(constants.RecordOperationTimeout):
 				logger.Error("start record timeout",
 					zap.String("stream_key", req.Stream))
-				s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
+				_ = s.streamRepo.UpdateRecordStatus(req.Stream, model.RecordStatusFailed)
 			}
 		}()
 	}
@@ -692,7 +692,7 @@ func (s *StreamService) CheckExpiredStreams() error {
 			logger.Info("auto ending stream past scheduled end time",
 				zap.String("stream_key", stream.StreamKey),
 				zap.Int("auto_kick_delay_minutes", stream.AutoKickDelay))
-			s.endStreamInternal(stream)
+			_ = s.endStreamInternal(stream)
 		}
 	}
 
@@ -738,7 +738,7 @@ func (s *StreamService) GetRecordFileURL(filePath string) string {
 func (s *StreamService) generateShareCode() string {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // 排除易混淆字符 I,O,0,1
 	b := make([]byte, 6)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	for i := range b {
 		b[i] = charset[int(b[i])%len(charset)]
 	}

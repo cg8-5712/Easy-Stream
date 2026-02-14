@@ -10,7 +10,9 @@ import (
 // Logger 日志中间件
 func Logger() gin.HandlerFunc {
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	return func(c *gin.Context) {
 		start := time.Now()

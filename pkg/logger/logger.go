@@ -61,5 +61,5 @@ func Warn(msg string, fields ...zap.Field) {
 
 // Sync 同步日志
 func Sync() {
-	log.Sync()
+	_ = log.Sync()
 }

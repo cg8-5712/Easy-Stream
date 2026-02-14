@@ -41,7 +41,7 @@ func (h *HookHandler) OnPublish(c *gin.Context) {
 
 	if err := h.streamSvc.OnPublish(&req); err != nil {
 		// 根据错误类型返回不同的错误信息
-		msg := "unknown error"
+		var msg string
 		switch err {
 		case service.ErrStreamNotFound:
 			msg = "stream not found"
@@ -70,7 +70,7 @@ func (h *HookHandler) OnUnpublish(c *gin.Context) {
 		zap.String("app", req.App),
 		zap.String("stream", req.Stream))
 
-	h.streamSvc.OnUnpublish(&req)
+	_ = h.streamSvc.OnUnpublish(&req)
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
 }
 
@@ -82,7 +82,7 @@ func (h *HookHandler) OnFlowReport(c *gin.Context) {
 		return
 	}
 
-	h.streamSvc.OnFlowReport(&req)
+	_ = h.streamSvc.OnFlowReport(&req)
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
 }
 
@@ -111,7 +111,7 @@ func (h *HookHandler) OnPlay(c *gin.Context) {
 		zap.String("stream", req.Stream),
 		zap.String("id", req.ID))
 
-	h.streamSvc.OnPlay(&req)
+	_ = h.streamSvc.OnPlay(&req)
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
 }
 
@@ -128,7 +128,7 @@ func (h *HookHandler) OnPlayerDisconnect(c *gin.Context) {
 		zap.String("stream", req.Stream),
 		zap.String("id", req.ID))
 
-	h.streamSvc.OnPlayerDisconnect(&req)
+	_ = h.streamSvc.OnPlayerDisconnect(&req)
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})
 }
 
@@ -148,7 +148,7 @@ func (h *HookHandler) OnStreamChanged(c *gin.Context) {
 	// regist=true 表示流注册（推流开始）
 	if req.Regist {
 		// 流已完全注册，此时开始录制
-		h.streamSvc.OnStreamRegistered(&req)
+		_ = h.streamSvc.OnStreamRegistered(&req)
 	} else {
 		// regist=false 表示推流结束
 		// 转换为 OnUnpublish 请求
@@ -158,7 +158,7 @@ func (h *HookHandler) OnStreamChanged(c *gin.Context) {
 			Schema:     req.Schema,
 			MediaSrvID: req.MediaSrvID,
 		}
-		h.streamSvc.OnUnpublish(unpublishReq)
+		_ = h.streamSvc.OnUnpublish(unpublishReq)
 	}
 
 	c.JSON(http.StatusOK, model.HookResponse{Code: 0, Msg: "success"})

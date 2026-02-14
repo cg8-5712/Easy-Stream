@@ -45,7 +45,9 @@ func (c *Client) WebRTCPlay(app, stream string, offerSDP string) (*WebRTCPlayRes
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -93,7 +95,9 @@ func (c *Client) WebRTCPush(app, stream string, offerSDP string) (*WebRTCPlayRes
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

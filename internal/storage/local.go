@@ -83,7 +83,9 @@ func (s *LocalStorage) UploadFromReader(ctx context.Context, reader io.Reader, r
 	if err != nil {
 		return "", fmt.Errorf("create dest file failed: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() {
+		_ = dstFile.Close()
+	}()
 
 	// 从 reader 复制到文件
 	_, err = io.Copy(dstFile, reader)
@@ -100,13 +102,17 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer func() {
+		_ = srcFile.Close()
+	}()
 
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() {
+		_ = dstFile.Close()
+	}()
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err

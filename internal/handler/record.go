@@ -334,5 +334,5 @@ func (h *RecordHandler) proxyRangeRequest(c *gin.Context, remoteURL, filename st
 
 	// 流式传输文件内容
 	c.Status(resp.StatusCode)
-	io.Copy(c.Writer, resp.Body)
+	_, _ = io.Copy(c.Writer, resp.Body)
 }

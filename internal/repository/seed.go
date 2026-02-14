@@ -1,8 +1,6 @@
 package repository
 
 import (
-	"crypto/rand"
-	"math/big"
 	"time"
 
 	"easy-stream/internal/config"
@@ -30,23 +28,6 @@ func SeedData(db *gorm.DB, cfg *config.Config) error {
 
 	logger.Info("debug mode: seed data insertion completed")
 	return nil
-}
-
-// generateRandomPassword 生成随机密码（避免易混淆字符）
-func generateRandomPassword(length int) (string, error) {
-	// 避免易混淆的字符：0 O o, 1 l I i, 2 Z z
-	const charset = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXY3456789"
-	password := make([]byte, length)
-
-	for i := range password {
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		if err != nil {
-			return "", err
-		}
-		password[i] = charset[num.Int64()]
-	}
-
-	return string(password), nil
 }
 
 // seedUsers 插入测试用户

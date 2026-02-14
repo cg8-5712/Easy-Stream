@@ -124,7 +124,7 @@ func Load() (*Config, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	// 绑定关键环境变量
-	viper.BindEnv("zlmediakit.hookbaseurl", "ZLMEDIAKIT_HOOKBASEURL")
+	_ = viper.BindEnv("zlmediakit.hookbaseurl", "ZLMEDIAKIT_HOOKBASEURL")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

@@ -314,7 +314,9 @@ func testDatabaseConnection(cfg DatabaseConfig) ServiceStatus {
 		status.Error = err.Error()
 		return status
 	}
-	defer sqlDB.Close()
+	defer func() {
+		_ = sqlDB.Close()
+	}()
 
 	if err := sqlDB.Ping(); err != nil {
 		status.Status = "✗ Failed"
@@ -342,7 +344,9 @@ func testRedisConnection(cfg RedisConfig) ServiceStatus {
 		Password: cfg.Password,
 		DB:       cfg.DB,
 	})
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

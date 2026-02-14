@@ -11,13 +11,13 @@ import (
 func GenerateStreamKey() string {
 	timestamp := time.Now().Unix()
 	random := make([]byte, 4)
-	rand.Read(random)
+	_, _ = rand.Read(random)
 	return fmt.Sprintf("stream_%d_%s", timestamp, hex.EncodeToString(random))
 }
 
 // GenerateToken 生成随机 Token
 func GenerateToken(length int) string {
 	bytes := make([]byte, length)
-	rand.Read(bytes)
+	_, _ = rand.Read(bytes)
 	return hex.EncodeToString(bytes)
 }

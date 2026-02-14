@@ -80,7 +80,9 @@ func (s *S3Storage) Upload(ctx context.Context, localPath, remotePath string) (s
 	if err != nil {
 		return "", fmt.Errorf("open file failed: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	// 构建对象键
 	key := remotePath

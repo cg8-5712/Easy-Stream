@@ -175,7 +175,9 @@ func (c *Client) get(path string, params url.Values) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	return io.ReadAll(resp.Body)
 }

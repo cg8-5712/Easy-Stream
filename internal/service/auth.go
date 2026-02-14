@@ -48,7 +48,7 @@ func (s *AuthService) Login(username, password string) (*model.LoginResponse, er
 	// 更新最后登录时间
 	now := time.Now()
 	user.LastLoginAt = &now
-	s.userRepo.UpdateLastLogin(user.ID, now)
+	_ = s.userRepo.UpdateLastLogin(user.ID, now)
 
 	// 生成 Access Token (短期，2小时)
 	accessToken, err := s.generateAccessToken(user)
@@ -105,7 +105,7 @@ func (s *AuthService) RefreshToken(refreshToken string) (*model.RefreshTokenResp
 	}
 
 	// 删除旧的 Refresh Token，存储新的
-	s.redisRepo.DeleteRefreshToken(refreshToken)
+	_ = s.redisRepo.DeleteRefreshToken(refreshToken)
 	if err := s.redisRepo.SetRefreshToken(user.ID, newRefreshToken, constants.RefreshTokenExpiry); err != nil {
 		return nil, err
 	}

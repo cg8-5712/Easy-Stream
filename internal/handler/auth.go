@@ -70,7 +70,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	h.authSvc.Logout(req.RefreshToken)
+	_ = h.authSvc.Logout(req.RefreshToken)
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
 

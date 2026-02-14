@@ -72,7 +72,11 @@ func main() {
 	logger.Info("redis connected successfully",
 		zap.String("host", cfg.Redis.Host),
 		zap.String("port", cfg.Redis.Port))
-	defer rdb.Close()
+	defer func() {
+		if err := rdb.Close(); err != nil {
+			logger.Error("failed to close redis connection", zap.Error(err))
+		}
+	}()
 
 	// Debug 模式下插入种子数据
 	if cfg.Server.Mode == "debug" {
