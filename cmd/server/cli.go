@@ -149,6 +149,22 @@ func setAdminPassword() error {
 		return fmt.Errorf("passwords do not match")
 	}
 
+	// 读取真实姓名
+	fmt.Print("Enter real name: ")
+	realName, _ := reader.ReadString('\n')
+	realName = strings.TrimSpace(realName)
+	if realName == "" {
+		return fmt.Errorf("real name is required")
+	}
+
+	// 读取邮箱
+	fmt.Print("Enter email: ")
+	email, _ := reader.ReadString('\n')
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+
 	// 生成密码哈希
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -160,15 +176,18 @@ func setAdminPassword() error {
 	result := db.Where("username = ?", username).First(&existingUser)
 
 	if result.Error == nil {
-		// 用户已存在，更新密码
-		if err := db.Model(&existingUser).Update("password_hash", string(hash)).Error; err != nil {
-			return fmt.Errorf("failed to update admin password: %w", err)
+		// 用户已存在，更新密码、真实姓名和邮箱
+		updates := map[string]interface{}{
+			"password_hash": string(hash),
+			"real_name":     realName,
+			"email":         email,
 		}
-		fmt.Printf("✓ Admin password updated successfully for user: %s\n", username)
+		if err := db.Model(&existingUser).Updates(updates).Error; err != nil {
+			return fmt.Errorf("failed to update admin user: %w", err)
+		}
+		fmt.Printf("✓ Admin user updated successfully: %s\n", username)
 	} else {
 		// 用户不存在，创建新用户
-		realName := "Administrator"
-		email := "admin@example.com"
 		user := &model.User{
 			Username:     username,
 			PasswordHash: string(hash),

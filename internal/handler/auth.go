@@ -196,7 +196,7 @@ func (h *AuthHandler) InitializeAdmin(c *gin.Context) {
 	}
 
 	// 初始化管理员账号
-	if err := h.authSvc.InitializeAdmin(req.Username, req.Password); err != nil {
+	if err := h.authSvc.InitializeAdmin(req.Username, req.Password, req.RealName, req.Email); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create admin user: " + err.Error()})
 		return
 	}

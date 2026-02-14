@@ -157,7 +157,7 @@ func (s *AuthService) IsInitialized() (bool, error) {
 }
 
 // InitializeAdmin 初始化管理员账号
-func (s *AuthService) InitializeAdmin(username, password string) error {
+func (s *AuthService) InitializeAdmin(username, password, realName, email string) error {
 	// 检查是否已有用户
 	hasUser, err := s.userRepo.HasAnyUser()
 	if err != nil {
@@ -179,8 +179,6 @@ func (s *AuthService) InitializeAdmin(username, password string) error {
 	}
 
 	// 创建管理员用户
-	realName := "Administrator"
-	email := "admin@example.com"
 	user := &model.User{
 		Username:     username,
 		PasswordHash: string(hash),
