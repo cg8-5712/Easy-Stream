@@ -1,12 +1,16 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log"
+	"os"
 	"time"
 
 	"easy-stream/internal/config"
 	"easy-stream/internal/handler"
 	"easy-stream/internal/middleware"
+	"easy-stream/internal/model"
 	"easy-stream/internal/repository"
 	"easy-stream/internal/service"
 	"easy-stream/internal/storage"
@@ -16,11 +20,27 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
 	// 解析命令行参数
 	if ParseFlags() {
+		return
+	}
+
+	// 检查配置文件是否存在
+	configExists := true
+	if _, err := os.Stat("config.yaml"); os.IsNotExist(err) {
+		configExists = false
+		log.Println("⚠ Config file not found")
+		log.Println("Starting in initialization mode...")
+		log.Println("Please visit http://localhost:8080 to initialize the system")
+	}
+
+	// 如果配置文件不存在，只启动初始化服务
+	if !configExists {
+		startInitializationMode()
 		return
 	}
 
@@ -251,6 +271,187 @@ func main() {
 	// 启动服务
 	addr := cfg.Server.Host + ":" + cfg.Server.Port
 	logger.Info("server starting", zap.String("address", addr))
+	if err := r.Run(addr); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+// startInitializationMode 启动初始化模式（无需配置文件）
+func startInitializationMode() {
+	// 使用默认配置启动最小化服务
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+
+	// 禁用自动重定向
+	r.RedirectTrailingSlash = false
+	r.RedirectFixedPath = false
+
+	// 中间件
+	r.Use(middleware.Cors())
+
+	// 只提供初始化相关的 API
+	api := r.Group("/api/v1")
+	{
+		auth := api.Group("/auth")
+		{
+			// 初始化状态检查（始终返回未初始化）
+			auth.GET("/init-status", func(c *gin.Context) {
+				c.JSON(200, gin.H{"initialized": false})
+			})
+
+			// 初始化接口（保存配置文件并创建管理员）
+			auth.POST("/initialize", func(c *gin.Context) {
+				var req struct {
+					Username         string `json:"username" binding:"required"`
+					Password         string `json:"password" binding:"required"`
+					RealName         string `json:"real_name" binding:"required"`
+					Email            string `json:"email" binding:"required,email"`
+					DatabaseType     string `json:"database_type" binding:"required"`
+					DatabaseFilePath string `json:"database_filepath"`
+					DatabaseHost     string `json:"database_host"`
+					DatabasePort     string `json:"database_port"`
+					DatabaseUser     string `json:"database_user"`
+					DatabasePassword string `json:"database_password"`
+					DatabaseName     string `json:"database_name"`
+					DatabaseSSLMode  string `json:"database_sslmode"`
+					RedisHost        string `json:"redis_host" binding:"required"`
+					RedisPort        string `json:"redis_port" binding:"required"`
+					RedisPassword    string `json:"redis_password"`
+					RedisDB          int    `json:"redis_db"`
+					ZLMHost          string `json:"zlm_host" binding:"required"`
+					ZLMPort          string `json:"zlm_port" binding:"required"`
+					ZLMSecret        string `json:"zlm_secret"`
+					ZLMHookBaseURL   string `json:"zlm_hook_base_url"`
+					JWTSecret        string `json:"jwt_secret"`
+					ServerHost       string `json:"server_host"`
+					ServerPort       string `json:"server_port" binding:"required"`
+				}
+
+				if err := c.ShouldBindJSON(&req); err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+
+				// 生成 JWT Secret（如果未提供）
+				jwtSecret := req.JWTSecret
+				if jwtSecret == "" {
+					b := make([]byte, 32)
+					if _, err := rand.Read(b); err != nil {
+						c.JSON(500, gin.H{"error": "failed to generate JWT secret"})
+						return
+					}
+					jwtSecret = hex.EncodeToString(b)
+				}
+
+				// 构建配置
+				cfg := &config.Config{
+					Server: config.ServerConfig{
+						Host: req.ServerHost,
+						Port: req.ServerPort,
+						Mode: "release",
+					},
+					Database: config.DatabaseConfig{
+						Type:     req.DatabaseType,
+						FilePath: req.DatabaseFilePath,
+						Host:     req.DatabaseHost,
+						Port:     req.DatabasePort,
+						User:     req.DatabaseUser,
+						Password: req.DatabasePassword,
+						DBName:   req.DatabaseName,
+						SSLMode:  req.DatabaseSSLMode,
+					},
+					Redis: config.RedisConfig{
+						Host:     req.RedisHost,
+						Port:     req.RedisPort,
+						Password: req.RedisPassword,
+						DB:       req.RedisDB,
+					},
+					JWT: config.JWTConfig{
+						Secret: jwtSecret,
+					},
+					Admin: config.AdminConfig{
+						Username: req.Username,
+						Password: "",
+					},
+					ZLMediaKit: config.ZLMediaKitConfig{
+						Host:            req.ZLMHost,
+						Port:            req.ZLMPort,
+						Secret:          req.ZLMSecret,
+						HookBaseURL:     req.ZLMHookBaseURL,
+						HTTPPort:        "80",
+						HTTPSPort:       "443",
+						WebRTCPort:      "8000",
+						RecordMode:      "local",
+						RecordLocalPath: "./records",
+					},
+					Log: config.LogConfig{
+						Level: "info",
+					},
+				}
+
+				// 设置默认值
+				if cfg.Server.Host == "" {
+					cfg.Server.Host = "0.0.0.0"
+				}
+				if cfg.Database.Type == "sqlite" && cfg.Database.FilePath == "" {
+					cfg.Database.FilePath = "./easy_stream.db"
+				}
+				if cfg.Database.Type == "postgres" && cfg.Database.SSLMode == "" {
+					cfg.Database.SSLMode = "disable"
+				}
+
+				// 验证配置
+				if err := config.Validate(cfg); err != nil {
+					c.JSON(400, gin.H{"error": "configuration validation failed: " + err.Error()})
+					return
+				}
+
+				// 保存配置文件
+				if err := config.SaveConfig(cfg); err != nil {
+					c.JSON(500, gin.H{"error": "failed to save configuration: " + err.Error()})
+					return
+				}
+
+				// 连接数据库并创建管理员用户
+				db, err := repository.NewPostgresDB(cfg.Database)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "failed to connect to database: " + err.Error()})
+					return
+				}
+
+				// 创建管理员用户
+				hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "failed to hash password: " + err.Error()})
+					return
+				}
+
+				user := &model.User{
+					Username:     req.Username,
+					PasswordHash: string(hash),
+					RealName:     &req.RealName,
+					Email:        &req.Email,
+				}
+
+				userRepo := repository.NewUserRepository(db)
+				if err := userRepo.Create(user); err != nil {
+					c.JSON(500, gin.H{"error": "failed to create admin user: " + err.Error()})
+					return
+				}
+
+				c.JSON(200, gin.H{"message": "system initialized successfully"})
+			})
+		}
+	}
+
+	// 静态文件服务（前端）
+	if err := web.ServeStatic(r); err != nil {
+		log.Printf("Warning: failed to serve static files: %v\n", err)
+	}
+
+	// 启动服务
+	addr := "0.0.0.0:8080"
+	log.Printf("Server starting in initialization mode on %s\n", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

@@ -50,7 +50,6 @@ redis:
 
 jwt:
   secret: "your-secret-key-change-this"
-  expirehour: 24
 
 # 管理员账号配置（可选，留空则自动生成随机密码）
 admin:
@@ -110,7 +109,6 @@ redis:
 
 jwt:
   secret: "%s"
-  expirehour: %d
 
 admin:
   username: "%s"
@@ -139,7 +137,7 @@ storage:
 		cfg.Database.Type, cfg.Database.FilePath, cfg.Database.Host, cfg.Database.Port,
 		cfg.Database.User, cfg.Database.Password, cfg.Database.DBName, cfg.Database.SSLMode,
 		cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB,
-		cfg.JWT.Secret, cfg.JWT.ExpireHour,
+		cfg.JWT.Secret,
 		cfg.Admin.Username,
 		cfg.ZLMediaKit.Host, cfg.ZLMediaKit.Port, cfg.ZLMediaKit.Secret, cfg.ZLMediaKit.HookBaseURL,
 		cfg.ZLMediaKit.HTTPPort, cfg.ZLMediaKit.HTTPSPort, cfg.ZLMediaKit.WebRTCPort,
@@ -205,9 +203,6 @@ func Validate(cfg *Config) error {
 	}
 	if cfg.JWT.Secret == "your-secret-key-change-this" {
 		return fmt.Errorf("jwt.secret must be changed from default value")
-	}
-	if cfg.JWT.ExpireHour <= 0 {
-		return fmt.Errorf("jwt.expirehour must be greater than 0")
 	}
 
 	// Validate ZLMediaKit

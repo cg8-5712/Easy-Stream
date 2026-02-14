@@ -42,8 +42,7 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
-	Secret     string
-	ExpireHour int
+	Secret string
 }
 
 type AdminConfig struct {
@@ -110,7 +109,6 @@ func Load() (*Config, error) {
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", "6379")
 	viper.SetDefault("redis.db", 0)
-	viper.SetDefault("jwt.expireHour", 24)
 	viper.SetDefault("admin.username", "admin")
 	viper.SetDefault("admin.password", "")
 	viper.SetDefault("zlmediakit.port", "80")

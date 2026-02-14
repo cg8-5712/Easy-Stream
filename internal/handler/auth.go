@@ -149,8 +149,7 @@ func (h *AuthHandler) InitializeAdmin(c *gin.Context) {
 			DB:       req.RedisDB,
 		},
 		JWT: config.JWTConfig{
-			Secret:     jwtSecret,
-			ExpireHour: 24,
+			Secret: jwtSecret,
 		},
 		Admin: config.AdminConfig{
 			Username: req.Username,

@@ -73,7 +73,7 @@ type InitializeAdminRequest struct {
 	ZLMSecret      string `json:"zlm_secret"`
 	ZLMHookBaseURL string `json:"zlm_hook_base_url"`
 	// JWT 配置
-	JWTSecret string `json:"jwt_secret" binding:"required,min=16"`
+	JWTSecret string `json:"jwt_secret" binding:"omitempty,min=16"`
 	// 服务器配置
 	ServerHost string `json:"server_host"`
 	ServerPort string `json:"server_port" binding:"required"`
