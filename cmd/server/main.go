@@ -169,8 +169,8 @@ func main() {
 		// 认证接口
 		auth := api.Group("/auth")
 		{
-			auth.GET("/init-status", authHandler.CheckInitStatus)           // 检查是否已初始化
-			auth.POST("/initialize", authHandler.InitializeAdmin)           // 初始化管理员账号
+			auth.GET("/init-status", authHandler.CheckInitStatus) // 检查是否已初始化
+			auth.POST("/initialize", authHandler.InitializeAdmin) // 初始化管理员账号
 			auth.POST("/login", middleware.LoginRateLimit(rdb.Client), authHandler.Login)
 			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.POST("/logout", authHandler.Logout)
@@ -255,10 +255,10 @@ func main() {
 		records := api.Group("/records")
 		records.Use(middleware.Auth(cfg.JWT.Secret))
 		{
-			records.GET("", recordHandler.ListRecords)                            // 获取所有录制文件列表
-			records.GET("/:key", recordHandler.GetRecordsByStreamKey)             // 根据stream_key获取录制文件
-			records.GET("/:key/play/*filepath", recordHandler.PlayFile)           // 播放录制文件（支持 Range 请求）
-			records.GET("/:key/download/*filepath", recordHandler.DownloadFile)   // 下载录制文件
+			records.GET("", recordHandler.ListRecords)                               // 获取所有录制文件列表
+			records.GET("/:key", recordHandler.GetRecordsByStreamKey)                // 根据stream_key获取录制文件
+			records.GET("/:key/play/*filepath", recordHandler.PlayFile)              // 播放录制文件（支持 Range 请求）
+			records.GET("/:key/download/*filepath", recordHandler.DownloadFile)      // 下载录制文件
 			records.DELETE("/:key/delete/*filepath", recordHandler.DeleteRecordFile) // 删除指定的录制文件
 		}
 	}

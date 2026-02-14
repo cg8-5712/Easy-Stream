@@ -188,4 +188,3 @@ func (s *AuthService) InitializeAdmin(username, password, realName, email string
 
 	return s.userRepo.Create(user)
 }
-

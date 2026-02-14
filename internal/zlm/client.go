@@ -188,25 +188,25 @@ type MediaListResponse struct {
 
 // MediaInfo 流信息
 type MediaInfo struct {
-	App           string  `json:"app"`
-	Stream        string  `json:"stream"`
-	Schema        string  `json:"schema"`
-	ReaderCount   int     `json:"readerCount"`
-	TotalReaderCount int  `json:"totalReaderCount"`
-	BytesSpeed    int     `json:"bytesSpeed"`
-	CreateStamp   int64   `json:"createStamp"`
-	AliveSecond   int     `json:"aliveSecond"`
-	Tracks        []Track `json:"tracks"`
+	App              string  `json:"app"`
+	Stream           string  `json:"stream"`
+	Schema           string  `json:"schema"`
+	ReaderCount      int     `json:"readerCount"`
+	TotalReaderCount int     `json:"totalReaderCount"`
+	BytesSpeed       int     `json:"bytesSpeed"`
+	CreateStamp      int64   `json:"createStamp"`
+	AliveSecond      int     `json:"aliveSecond"`
+	Tracks           []Track `json:"tracks"`
 }
 
 // Track 轨道信息
 type Track struct {
-	CodecID   int    `json:"codec_id"`
-	CodecType int    `json:"codec_type"`
-	Ready     bool   `json:"ready"`
-	FPS       int    `json:"fps"`
-	Width     int    `json:"width"`
-	Height    int    `json:"height"`
+	CodecID   int  `json:"codec_id"`
+	CodecType int  `json:"codec_type"`
+	Ready     bool `json:"ready"`
+	FPS       int  `json:"fps"`
+	Width     int  `json:"width"`
+	Height    int  `json:"height"`
 }
 
 // CommonResponse 通用响应
@@ -267,13 +267,13 @@ func (c *Client) SetServerConfig(configs map[string]string) (*CommonResponse, er
 // hookBaseURL 应该是 Easy-Stream 的回调地址，如 "http://easy-stream:8080/api/v1/hooks"
 func (c *Client) ConfigureHooks(hookBaseURL string) error {
 	configs := map[string]string{
-		"hook.enable":                 "1",
-		"hook.on_publish":             hookBaseURL + "/on_publish",
-		"hook.on_stream_changed":      hookBaseURL + "/on_stream_changed",
-		"hook.on_play":                hookBaseURL + "/on_play",
-		"hook.on_flow_report":         hookBaseURL + "/on_flow_report",
-		"hook.on_stream_none_reader":  hookBaseURL + "/on_stream_none_reader",
-		"hook.on_record_mp4":          hookBaseURL + "/on_record_mp4",
+		"hook.enable":                "1",
+		"hook.on_publish":            hookBaseURL + "/on_publish",
+		"hook.on_stream_changed":     hookBaseURL + "/on_stream_changed",
+		"hook.on_play":               hookBaseURL + "/on_play",
+		"hook.on_flow_report":        hookBaseURL + "/on_flow_report",
+		"hook.on_stream_none_reader": hookBaseURL + "/on_stream_none_reader",
+		"hook.on_record_mp4":         hookBaseURL + "/on_record_mp4",
 	}
 
 	resp, err := c.SetServerConfig(configs)

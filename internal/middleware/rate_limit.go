@@ -49,7 +49,7 @@ func RateLimiter(redisClient *redis.Client, config RateLimitConfig) gin.HandlerF
 		if count > int64(config.MaxRequests) {
 			// 超过限制，返回 429 Too Many Requests
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "rate limit exceeded",
+				"error":       "rate limit exceeded",
 				"retry_after": int(config.Window.Seconds()),
 			})
 			c.Abort()

@@ -148,4 +148,3 @@ func (r *RedisClient) GetStreamKeyByAccessToken(token string) (string, error) {
 
 	return "", nil
 }
-

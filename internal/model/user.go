@@ -79,7 +79,6 @@ type InitializeAdminRequest struct {
 	ServerPort string `json:"server_port" binding:"required"`
 }
 
-
 // InitStatusResponse 初始化状态响应
 type InitStatusResponse struct {
 	Initialized bool `json:"initialized"`

@@ -71,7 +71,7 @@ type OnStreamChangedRequest struct {
 	Stream     string `json:"stream"`
 	Schema     string `json:"schema"`
 	MediaSrvID string `json:"mediaServerId"`
-	Regist     bool   `json:"regist"` // true=注册(推流开始), false=注销(推流结束)
+	Regist     bool   `json:"regist"`     // true=注册(推流开始), false=注销(推流结束)
 	OriginType int    `json:"originType"` // 流来源类型
 	OriginURL  string `json:"originUrl"`  // 流来源URL
 }
@@ -81,13 +81,13 @@ type OnRecordMP4Request struct {
 	App        string  `json:"app"`
 	Stream     string  `json:"stream"`
 	MediaSrvID string  `json:"mediaServerId"`
-	FileName   string  `json:"file_name"`   // 文件名
-	FilePath   string  `json:"file_path"`   // 文件绝对路径
-	FileSize   int64   `json:"file_size"`   // 文件大小（字节）
-	Folder     string  `json:"folder"`      // 文件所在目录
-	StartTime  int64   `json:"start_time"`  // 录制开始时间戳
-	TimeLen    float64 `json:"time_len"`    // 录制时长（秒）
-	URL        string  `json:"url"`         // 播放地址
+	FileName   string  `json:"file_name"`  // 文件名
+	FilePath   string  `json:"file_path"`  // 文件绝对路径
+	FileSize   int64   `json:"file_size"`  // 文件大小（字节）
+	Folder     string  `json:"folder"`     // 文件所在目录
+	StartTime  int64   `json:"start_time"` // 录制开始时间戳
+	TimeLen    float64 `json:"time_len"`   // 录制时长（秒）
+	URL        string  `json:"url"`        // 播放地址
 }
 
 // HookResponse Hook 响应

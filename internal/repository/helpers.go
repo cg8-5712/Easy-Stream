@@ -34,4 +34,3 @@ func HandleNotFoundError(err error, notFoundErr error) error {
 	}
 	return err
 }
-

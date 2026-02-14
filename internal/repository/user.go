@@ -55,4 +55,3 @@ func (r *UserRepository) HasAnyUser() (bool, error) {
 func (r *UserRepository) Create(user *model.User) error {
 	return r.db.Create(user).Error
 }
-
