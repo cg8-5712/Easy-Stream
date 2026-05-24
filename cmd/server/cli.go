@@ -12,6 +12,7 @@ import (
 	"easy-stream/internal/config"
 	"easy-stream/internal/model"
 	"easy-stream/internal/repository"
+	"easy-stream/pkg/logger"
 
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
@@ -107,6 +108,9 @@ func setAdminPassword() error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+
+	// 初始化日志（NewPostgresDB 会调用 AutoMigrate -> logger.Info）
+	logger.Init(cfg.Log.Level)
 
 	// 连接数据库
 	db, err := repository.NewPostgresDB(cfg.Database)
