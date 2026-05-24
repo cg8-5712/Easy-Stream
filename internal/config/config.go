@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -89,6 +90,11 @@ type StorageTarget struct {
 	SecretAccessKey string `mapstructure:"secretAccessKey"` // 访问密钥
 	PathPrefix      string `mapstructure:"pathPrefix"`      // 存储路径前缀
 	CustomDomain    string `mapstructure:"customDomain"`    // 自定义域名（用于生成访问URL）
+}
+
+func ConfigFileExists() bool {
+	_, err := os.Stat("config.yaml")
+	return err == nil
 }
 
 func Load() (*Config, error) {

@@ -81,5 +81,8 @@ type InitializeAdminRequest struct {
 
 // InitStatusResponse 初始化状态响应
 type InitStatusResponse struct {
-	Initialized bool `json:"initialized"`
+	Initialized       bool `json:"initialized"`
+	ConfigExists      bool `json:"config_exists"`
+	NeedsAdminSetup   bool `json:"needs_admin_setup"`
+	CanWriteConfig    bool `json:"can_write_config"`
 }

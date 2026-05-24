@@ -3,7 +3,9 @@ package handler
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"net/http"
+	"os"
 
 	"easy-stream/internal/config"
 	"easy-stream/internal/model"
@@ -92,7 +94,14 @@ func (h *AuthHandler) CheckInitStatus(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, model.InitStatusResponse{Initialized: initialized})
+
+	configExists := config.ConfigFileExists()
+	c.JSON(http.StatusOK, model.InitStatusResponse{
+		Initialized:     initialized || configExists,
+		ConfigExists:    configExists,
+		NeedsAdminSetup: configExists && !initialized,
+		CanWriteConfig:  canWriteConfigFile(),
+	})
 }
 
 // InitializeAdmin 初始化管理员账号和配置
@@ -103,7 +112,6 @@ func (h *AuthHandler) InitializeAdmin(c *gin.Context) {
 		return
 	}
 
-	// 检查是否已初始化
 	initialized, err := h.authSvc.IsInitialized()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -114,91 +122,97 @@ func (h *AuthHandler) InitializeAdmin(c *gin.Context) {
 		return
 	}
 
-	// 生成 JWT Secret（如果未提供）
-	jwtSecret := req.JWTSecret
-	if jwtSecret == "" {
-		b := make([]byte, 32)
-		if _, err := rand.Read(b); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate JWT secret"})
+	configExists := config.ConfigFileExists()
+	if !configExists {
+		jwtSecret := req.JWTSecret
+		if jwtSecret == "" {
+			b := make([]byte, 32)
+			if _, err := rand.Read(b); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate JWT secret"})
+				return
+			}
+			jwtSecret = hex.EncodeToString(b)
+		}
+
+		cfg := &config.Config{
+			Server: config.ServerConfig{
+				Host: req.ServerHost,
+				Port: req.ServerPort,
+				Mode: "release",
+			},
+			Database: config.DatabaseConfig{
+				Type:     req.DatabaseType,
+				FilePath: req.DatabaseFilePath,
+				Host:     req.DatabaseHost,
+				Port:     req.DatabasePort,
+				User:     req.DatabaseUser,
+				Password: req.DatabasePassword,
+				DBName:   req.DatabaseName,
+				SSLMode:  req.DatabaseSSLMode,
+			},
+			Redis: config.RedisConfig{
+				Host:     req.RedisHost,
+				Port:     req.RedisPort,
+				Password: req.RedisPassword,
+				DB:       req.RedisDB,
+			},
+			JWT: config.JWTConfig{
+				Secret: jwtSecret,
+			},
+			Admin: config.AdminConfig{
+				Username: req.Username,
+				Password: "",
+			},
+			ZLMediaKit: config.ZLMediaKitConfig{
+				Host:            req.ZLMHost,
+				Port:            req.ZLMPort,
+				Secret:          req.ZLMSecret,
+				HookBaseURL:     req.ZLMHookBaseURL,
+				HTTPPort:        "80",
+				HTTPSPort:       "443",
+				WebRTCPort:      "8000",
+				RecordMode:      "local",
+				RecordLocalPath: "./records",
+			},
+			Log: config.LogConfig{
+				Level: "info",
+			},
+		}
+
+		if cfg.Server.Host == "" {
+			cfg.Server.Host = "0.0.0.0"
+		}
+		if cfg.Database.Type == "sqlite" && cfg.Database.FilePath == "" {
+			cfg.Database.FilePath = "./easy_stream.db"
+		}
+		if cfg.Database.Type == "postgres" && cfg.Database.SSLMode == "" {
+			cfg.Database.SSLMode = "disable"
+		}
+
+		if err := config.Validate(cfg); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "configuration validation failed: " + err.Error()})
 			return
 		}
-		jwtSecret = hex.EncodeToString(b)
+
+		if err := config.SaveConfig(cfg); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save configuration: " + err.Error()})
+			return
+		}
 	}
 
-	// 构建配置
-	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Host: req.ServerHost,
-			Port: req.ServerPort,
-			Mode: "release",
-		},
-		Database: config.DatabaseConfig{
-			Type:     req.DatabaseType,
-			FilePath: req.DatabaseFilePath,
-			Host:     req.DatabaseHost,
-			Port:     req.DatabasePort,
-			User:     req.DatabaseUser,
-			Password: req.DatabasePassword,
-			DBName:   req.DatabaseName,
-			SSLMode:  req.DatabaseSSLMode,
-		},
-		Redis: config.RedisConfig{
-			Host:     req.RedisHost,
-			Port:     req.RedisPort,
-			Password: req.RedisPassword,
-			DB:       req.RedisDB,
-		},
-		JWT: config.JWTConfig{
-			Secret: jwtSecret,
-		},
-		Admin: config.AdminConfig{
-			Username: req.Username,
-			Password: "",
-		},
-		ZLMediaKit: config.ZLMediaKitConfig{
-			Host:            req.ZLMHost,
-			Port:            req.ZLMPort,
-			Secret:          req.ZLMSecret,
-			HookBaseURL:     req.ZLMHookBaseURL,
-			HTTPPort:        "80",
-			HTTPSPort:       "443",
-			WebRTCPort:      "8000",
-			RecordMode:      "local",
-			RecordLocalPath: "./records",
-		},
-		Log: config.LogConfig{
-			Level: "info",
-		},
-	}
-
-	// 设置默认值
-	if cfg.Server.Host == "" {
-		cfg.Server.Host = "0.0.0.0"
-	}
-	if cfg.Database.Type == "sqlite" && cfg.Database.FilePath == "" {
-		cfg.Database.FilePath = "./easy_stream.db"
-	}
-	if cfg.Database.Type == "postgres" && cfg.Database.SSLMode == "" {
-		cfg.Database.SSLMode = "disable"
-	}
-
-	// 验证配置
-	if err := config.Validate(cfg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "configuration validation failed: " + err.Error()})
-		return
-	}
-
-	// 保存配置文件
-	if err := config.SaveConfig(cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save configuration: " + err.Error()})
-		return
-	}
-
-	// 初始化管理员账号
 	if err := h.authSvc.InitializeAdmin(req.Username, req.Password, req.RealName, req.Email); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create admin user: " + err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "system initialized successfully"})
+}
+
+func canWriteConfigFile() bool {
+	f, err := os.OpenFile("config.yaml", os.O_WRONLY|os.O_APPEND, 0)
+	if err == nil {
+		_ = f.Close()
+		return true
+	}
+	return errors.Is(err, os.ErrNotExist)
 }
