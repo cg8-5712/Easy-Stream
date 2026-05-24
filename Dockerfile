@@ -1,38 +1,87 @@
-# 构建阶段
-FROM golang:1.21-alpine AS builder
+# ---------- Frontend builder ----------
+FROM node:24-alpine AS frontend-builder
 
-WORKDIR /app
+# Alpine 换阿里源
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
 
-# 安装依赖
-RUN apk add --no-cache git
+WORKDIR /frontend
 
-# 复制 go.mod 和 go.sum
-COPY go.mod go.sum* ./
+# Yarn 国内源
+RUN corepack enable \
+    && yarn config set registry https://registry.npmmirror.com
+
+COPY frontend/package.json frontend/yarn.lock ./
+
+RUN yarn install --frozen-lockfile
+
+COPY frontend/ ./
+
+RUN yarn build
+
+
+# ---------- Go builder ----------
+FROM golang:1.26-alpine AS builder
+
+# Alpine 换阿里源
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
+    && apk add --no-cache \
+       git \
+       gcc \
+       g++ \
+       musl-dev \
+       make
+
+WORKDIR /src
+
+# Go 国内代理
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GOSUMDB=sum.golang.google.cn
+
+# CGO
+ENV CGO_ENABLED=1
+
+# 依赖
+COPY go.mod go.sum ./
+
 RUN go mod download
 
-# 复制源代码
+# 代码
 COPY . .
 
-# 构建
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./cmd/server
+# 前端产物
+COPY --from=frontend-builder /frontend/dist ./web/dist
 
-# 运行阶段
-FROM alpine:3.19
+# 构建
+RUN GOOS=linux GOARCH=amd64 \
+    go build \
+    -tags embed_frontend \
+    -ldflags="-s -w" \
+    -o /app/server \
+    ./cmd/server
+
+
+# ---------- Runtime ----------
+FROM alpine:3.20
+
+# Alpine 换阿里源
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
+    && apk add --no-cache \
+       ca-certificates \
+       tzdata \
+       sqlite-libs
 
 WORKDIR /app
 
-# 安装 ca-certificates
-RUN apk add --no-cache ca-certificates tzdata
+RUN adduser -D -h /app appuser
 
-# 设置时区
-ENV TZ=Asia/Shanghai
+COPY --from=builder /app/server /app/server
+COPY config.example.yaml /app/config.example.yaml
 
-# 复制二进制文件
-COPY --from=builder /app/server .
-COPY --from=builder /app/config.yaml .
+RUN mkdir -p /app/data/records \
+    && chown -R appuser:appuser /app
 
-# 暴露端口
+USER appuser
+
 EXPOSE 8080
 
-# 运行
-CMD ["./server"]
+ENTRYPOINT ["/app/server"]

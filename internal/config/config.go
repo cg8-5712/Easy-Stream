@@ -131,6 +131,17 @@ func Load() (*Config, error) {
 
 	// 绑定关键环境变量
 	_ = viper.BindEnv("zlmediakit.hookbaseurl", "ZLMEDIAKIT_HOOKBASEURL")
+	_ = viper.BindEnv("database.type", "DATABASE_TYPE")
+	_ = viper.BindEnv("database.host", "DATABASE_HOST")
+	_ = viper.BindEnv("database.port", "DATABASE_PORT")
+	_ = viper.BindEnv("database.user", "DATABASE_USER")
+	_ = viper.BindEnv("database.password", "DATABASE_PASSWORD")
+	_ = viper.BindEnv("database.dbname", "DATABASE_DBNAME")
+	_ = viper.BindEnv("database.sslmode", "DATABASE_SSLMODE")
+	_ = viper.BindEnv("redis.host", "REDIS_HOST")
+	_ = viper.BindEnv("redis.port", "REDIS_PORT")
+	_ = viper.BindEnv("redis.password", "REDIS_PASSWORD")
+	_ = viper.BindEnv("redis.db", "REDIS_DB")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
